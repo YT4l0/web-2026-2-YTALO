@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { ScreenType, Vehicle } from '../../types/vehicle';
-import { MOCK_VEHICLES } from '../../data/mockVehicles';
+import {
+  noSqlFindVehicles,
+  documentToVehicle,
+} from '../../services/noSqlVehicleService';
+import type { VehicleQueryFilter } from '../../services/noSqlVehicleService';
 import {
   IconMapPin,
   IconHeart,
@@ -11,33 +15,151 @@ import {
 } from '../icons/Icons';
 
 interface SearchScreenProps {
+  favoriteIds?: string[];
+  onToggleFavorite?: (vehicleId: string) => void;
   onNavigate: (screen: ScreenType) => void;
   onSelectVehicle: (vehicle: Vehicle) => void;
 }
 
+const ITEMS_PER_PAGE = 6;
+
 export const SearchScreen: React.FC<SearchScreenProps> = ({
+  favoriteIds = [],
+  onToggleFavorite,
   onNavigate,
   onSelectVehicle,
 }) => {
-  const [selectedSort, setSelectedSort] = useState('Mais relevantes');
-  const [selectedCities, setSelectedCities] = useState<string[]>(['Pau dos Ferros - RN']);
-  const [selectedBrands, setSelectedBrands] = useState<string[]>(['Chevrolet']);
+  // ── Estados de filtro ────────────────────────────────────────────────
+  const [selectedSort, setSelectedSort] = useState<string>('relevant');
+  const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>(['Todos']);
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+  const [minYear, setMinYear] = useState('');
+  const [maxYear, setMaxYear] = useState('');
+  const [maxMileage, setMaxMileage] = useState('');
+
+  // ── Estados de resultado ─────────────────────────────────────────────
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [totalResults, setTotalResults] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // ── Alerta de busca ──────────────────────────────────────────────────
   const [alertContact, setAlertContact] = useState('');
   const [isAlertCreated, setIsAlertCreated] = useState(false);
 
+  // ── Buscar veículos quando filtros mudam ──────────────────────────────
+  const fetchVehicles = useCallback(async () => {
+    setIsLoading(true);
+
+    // Mapeamento do tipo selecionado para o tipo do documento
+    const typeMapping: Record<string, string> = {
+      Carros: 'carro',
+      Motos: 'moto',
+      Utilitários: 'utilitario',
+    };
+
+    const vehicleTypeFilter = selectedTypes.includes('Todos')
+      ? []
+      : selectedTypes.map((t) => typeMapping[t]).filter(Boolean);
+
+    // Mapeamento da ordenação
+    const sortMapping: Record<string, VehicleQueryFilter['sort']> = {
+      relevant: 'relevant',
+      'Menor preço': 'price_asc',
+      'Maior preço': 'price_desc',
+      'Mais recentes': 'newest',
+    };
+
+    const query: VehicleQueryFilter = {
+      vehicleType: vehicleTypeFilter.length > 0 ? vehicleTypeFilter : undefined,
+      city: selectedCities.length > 0 ? selectedCities : undefined,
+      brand: selectedBrands.length > 0 ? selectedBrands : undefined,
+      minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
+      maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
+      minYear: minYear ? parseInt(minYear, 10) : undefined,
+      maxYear: maxYear ? parseInt(maxYear, 10) : undefined,
+      maxMileage: maxMileage ? parseInt(maxMileage, 10) : undefined,
+      sort: sortMapping[selectedSort] || 'relevant',
+    };
+
+    try {
+      const docs = await noSqlFindVehicles(query);
+      const allVehicles = docs.map(documentToVehicle);
+      setTotalResults(allVehicles.length);
+
+      // Paginação
+      const start = (currentPage - 1) * ITEMS_PER_PAGE;
+      const paged = allVehicles.slice(start, start + ITEMS_PER_PAGE);
+      setVehicles(paged);
+    } catch (err) {
+      console.error('Erro ao buscar veículos:', err);
+      setVehicles([]);
+      setTotalResults(0);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedSort, selectedCities, selectedBrands, selectedTypes, minPrice, maxPrice, minYear, maxYear, maxMileage, currentPage]);
+
+  useEffect(() => {
+    fetchVehicles();
+  }, [fetchVehicles]);
+
+  // ── Contagem dinâmica por filtro ─────────────────────────────────────
+  const [cityCounts, setCityCounts] = useState<Record<string, number>>({});
+  const [brandCounts, setBrandCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    // Buscar todos os veículos para contar
+    const loadCounts = async () => {
+      try {
+        const allDocs = await noSqlFindVehicles({});
+        const cities: Record<string, number> = {};
+        const brands: Record<string, number> = {};
+        allDocs.forEach((doc) => {
+          cities[doc.location] = (cities[doc.location] || 0) + 1;
+          brands[doc.brand] = (brands[doc.brand] || 0) + 1;
+        });
+        setCityCounts(cities);
+        setBrandCounts(brands);
+      } catch (err) {
+        console.error('Erro ao carregar contagens:', err);
+      }
+    };
+    loadCounts();
+  }, []);
+
+  // ── Handlers ─────────────────────────────────────────────────────────
   const toggleCity = (city: string) => {
     setSelectedCities((prev) =>
       prev.includes(city) ? prev.filter((c) => c !== city) : [...prev, city]
     );
+    setCurrentPage(1);
   };
 
   const toggleBrand = (brand: string) => {
     setSelectedBrands((prev) =>
       prev.includes(brand) ? prev.filter((b) => b !== brand) : [...prev, brand]
     );
+    setCurrentPage(1);
+  };
+
+  const toggleType = (type: string) => {
+    if (type === 'Todos') {
+      setSelectedTypes(['Todos']);
+    } else {
+      setSelectedTypes((prev) => {
+        const withoutTodos = prev.filter((t) => t !== 'Todos');
+        if (withoutTodos.includes(type)) {
+          const next = withoutTodos.filter((t) => t !== type);
+          return next.length === 0 ? ['Todos'] : next;
+        }
+        return [...withoutTodos, type];
+      });
+    }
+    setCurrentPage(1);
   };
 
   const clearFilters = () => {
@@ -46,6 +168,10 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
     setSelectedTypes(['Todos']);
     setMinPrice('');
     setMaxPrice('');
+    setMinYear('');
+    setMaxYear('');
+    setMaxMileage('');
+    setCurrentPage(1);
   };
 
   const handleCreateAlert = (e: React.FormEvent) => {
@@ -56,6 +182,42 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
       setAlertContact('');
     }
   };
+
+  // ── Paginação ────────────────────────────────────────────────────────
+  const totalPages = Math.ceil(totalResults / ITEMS_PER_PAGE);
+  const startItem = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const endItem = Math.min(currentPage * ITEMS_PER_PAGE, totalResults);
+
+  const getPageNumbers = () => {
+    const pages: (number | '...')[] = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push('...');
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (currentPage < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
+  // ── Listas de opções ─────────────────────────────────────────────────
+  const cityOptions = Object.entries(cityCounts).sort((a, b) => b[1] - a[1]);
+  const brandOptions = Object.entries(brandCounts).sort((a, b) => b[1] - a[1]);
+
+  const activeFilterCount = [
+    selectedCities.length > 0,
+    selectedBrands.length > 0,
+    !selectedTypes.includes('Todos'),
+    !!minPrice,
+    !!maxPrice,
+    !!minYear,
+    !!maxYear,
+    !!maxMileage,
+  ].filter(Boolean).length;
 
   return (
     <div className="bg-[#f8fafc] min-h-screen text-slate-800 pb-16 font-sans">
@@ -76,10 +238,15 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              124 veículos encontrados
+              {isLoading ? '...' : totalResults} veículo{totalResults !== 1 ? 's' : ''} encontrado{totalResults !== 1 ? 's' : ''}
             </h1>
             <p className="text-xs text-slate-500 mt-1">
               Carros, motos e utilitários seminovos e novos na região de Pau dos Ferros - RN.
+              {activeFilterCount > 0 && (
+                <span className="ml-2 text-blue-600 font-semibold">
+                  ({activeFilterCount} filtro{activeFilterCount > 1 ? 's' : ''} ativo{activeFilterCount > 1 ? 's' : ''})
+                </span>
+              )}
             </p>
           </div>
 
@@ -89,10 +256,10 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             <span className="text-slate-500">Ordenar por:</span>
             <select
               value={selectedSort}
-              onChange={(e) => setSelectedSort(e.target.value)}
+              onChange={(e) => { setSelectedSort(e.target.value); setCurrentPage(1); }}
               className="bg-transparent font-bold text-slate-900 outline-none cursor-pointer"
             >
-              <option value="Mais relevantes">Mais relevantes</option>
+              <option value="relevant">Mais relevantes</option>
               <option value="Menor preço">Menor preço</option>
               <option value="Maior preço">Maior preço</option>
               <option value="Mais recentes">Mais recentes</option>
@@ -123,33 +290,17 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-900 block">Tipo de Veículo</label>
               <div className="space-y-1.5 text-xs text-slate-600">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedTypes.includes('Todos')}
-                    onChange={() => setSelectedTypes(['Todos'])}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
-                  />
-                  <span>Todos</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedTypes.includes('Carros')}
-                    onChange={() => setSelectedTypes(['Carros'])}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
-                  />
-                  <span>Carros e Picapes (98)</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedTypes.includes('Motos')}
-                    onChange={() => setSelectedTypes(['Motos'])}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
-                  />
-                  <span>Motos (26)</span>
-                </label>
+                {['Todos', 'Carros', 'Motos', 'Utilitários'].map((type) => (
+                  <label key={type} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedTypes.includes(type)}
+                      onChange={() => toggleType(type)}
+                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
+                    />
+                    <span>{type}</span>
+                  </label>
+                ))}
               </div>
             </div>
 
@@ -157,21 +308,16 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-900 block">Cidade</label>
               <div className="space-y-1.5 text-xs text-slate-600">
-                {[
-                  { name: 'Pau dos Ferros - RN', count: 72 },
-                  { name: 'Alexandria - RN', count: 21 },
-                  { name: 'São Miguel - RN', count: 18 },
-                  { name: 'Apodi - RN', count: 13 },
-                ].map((c) => (
-                  <label key={c.name} className="flex items-center gap-2 cursor-pointer">
+                {cityOptions.map(([name, count]) => (
+                  <label key={name} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={selectedCities.includes(c.name)}
-                      onChange={() => toggleCity(c.name)}
+                      checked={selectedCities.includes(name)}
+                      onChange={() => toggleCity(name)}
                       className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
                     />
                     <span>
-                      {c.name} ({c.count})
+                      {name} ({count})
                     </span>
                   </label>
                 ))}
@@ -182,23 +328,16 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-900 block">Marca</label>
               <div className="space-y-1.5 text-xs text-slate-600 max-h-40 overflow-y-auto pr-1 scrollbar-thin">
-                {[
-                  { name: 'Chevrolet', count: 32 },
-                  { name: 'Fiat', count: 28 },
-                  { name: 'Toyota', count: 19 },
-                  { name: 'Honda', count: 15 },
-                  { name: 'Volkswagen', count: 12 },
-                  { name: 'Yamaha', count: 10 },
-                ].map((b) => (
-                  <label key={b.name} className="flex items-center gap-2 cursor-pointer">
+                {brandOptions.map(([name, count]) => (
+                  <label key={name} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={selectedBrands.includes(b.name)}
-                      onChange={() => toggleBrand(b.name)}
+                      checked={selectedBrands.includes(name)}
+                      onChange={() => toggleBrand(name)}
                       className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
                     />
                     <span>
-                      {b.name} ({b.count})
+                      {name} ({count})
                     </span>
                   </label>
                 ))}
@@ -213,14 +352,14 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
                   type="number"
                   placeholder="Min R$"
                   value={minPrice}
-                  onChange={(e) => setMinPrice(e.target.value)}
+                  onChange={(e) => { setMinPrice(e.target.value); setCurrentPage(1); }}
                   className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
                 />
                 <input
                   type="number"
                   placeholder="Máx R$"
                   value={maxPrice}
-                  onChange={(e) => setMaxPrice(e.target.value)}
+                  onChange={(e) => { setMaxPrice(e.target.value); setCurrentPage(1); }}
                   className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
                 />
               </div>
@@ -231,13 +370,17 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
               <label className="text-xs font-bold text-slate-900 block">Ano</label>
               <div className="grid grid-cols-2 gap-2">
                 <input
-                  type="text"
+                  type="number"
                   placeholder="De"
+                  value={minYear}
+                  onChange={(e) => { setMinYear(e.target.value); setCurrentPage(1); }}
                   className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
                 />
                 <input
-                  type="text"
+                  type="number"
                   placeholder="Até"
+                  value={maxYear}
+                  onChange={(e) => { setMaxYear(e.target.value); setCurrentPage(1); }}
                   className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
                 />
               </div>
@@ -246,119 +389,204 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
             {/* Section 6: Quilometragem */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-900 block">Quilometragem máxima</label>
-              <select className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none cursor-pointer">
+              <select
+                value={maxMileage}
+                onChange={(e) => { setMaxMileage(e.target.value); setCurrentPage(1); }}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 outline-none cursor-pointer"
+              >
                 <option value="">Qualquer quilometragem</option>
+                <option value="10000">Até 10.000 km</option>
                 <option value="20000">Até 20.000 km</option>
+                <option value="30000">Até 30.000 km</option>
                 <option value="50000">Até 50.000 km</option>
+                <option value="70000">Até 70.000 km</option>
                 <option value="100000">Até 100.000 km</option>
               </select>
             </div>
 
-            {/* Apply Button */}
-            <button
-              type="button"
-              className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all active:scale-[0.98]"
-            >
-              Aplicar Filtros
-            </button>
+            {/* Active filter chips */}
+            {activeFilterCount > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+                {selectedCities.map((c) => (
+                  <span
+                    key={c}
+                    onClick={() => toggleCity(c)}
+                    className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-1 rounded-full cursor-pointer hover:bg-blue-100 flex items-center gap-1"
+                  >
+                    {c.split(' - ')[0]} ×
+                  </span>
+                ))}
+                {selectedBrands.map((b) => (
+                  <span
+                    key={b}
+                    onClick={() => toggleBrand(b)}
+                    className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-1 rounded-full cursor-pointer hover:bg-blue-100 flex items-center gap-1"
+                  >
+                    {b} ×
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* RIGHT COLUMN: RESULTS GRID & ALERT */}
           <div className="lg:col-span-9 space-y-8">
-            {/* 3x2 Grid of Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {MOCK_VEHICLES.slice(0, 6).map((vehicle) => (
-                <div
-                  key={vehicle.id}
-                  onClick={() => onSelectVehicle(vehicle)}
-                  className="bg-white rounded-2xl overflow-hidden border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between cursor-pointer group"
+            {/* Loading state */}
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="bg-white rounded-2xl overflow-hidden border border-slate-200/90 shadow-sm animate-pulse">
+                    <div className="h-44 bg-slate-200" />
+                    <div className="p-4 space-y-3">
+                      <div className="h-3 bg-slate-200 rounded w-2/3" />
+                      <div className="h-4 bg-slate-200 rounded w-full" />
+                      <div className="h-3 bg-slate-200 rounded w-1/2" />
+                      <div className="h-5 bg-slate-200 rounded w-1/3 mt-4" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : vehicles.length === 0 ? (
+              /* Empty state */
+              <div className="text-center py-16 bg-white rounded-2xl border border-slate-200/90 shadow-sm">
+                <div className="text-4xl mb-4">🔍</div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">
+                  Nenhum veículo encontrado
+                </h3>
+                <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">
+                  Tente ajustar os filtros ou limpar a busca para ver mais resultados.
+                </p>
+                <button
+                  onClick={clearFilters}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-6 py-3 rounded-xl shadow-md transition-colors"
                 >
-                  {/* Image header */}
-                  <div className="relative h-44 overflow-hidden bg-slate-100">
-                    <img
-                      src={vehicle.mainImage}
-                      alt={vehicle.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-
-                    {/* Location Badge top right */}
-                    <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-md text-[10px] font-bold text-slate-800 flex items-center gap-1 shadow-sm">
-                      <IconMapPin size={11} className="text-blue-600" />
-                      <span>{vehicle.location.split(' - ')[0]}</span>
-                    </div>
-
-                    {/* FIPE Badge bottom left */}
-                    {vehicle.fipeBadge && (
-                      <div className="absolute bottom-3 left-3 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
-                        {vehicle.fipeBadge}
-                      </div>
-                    )}
-
-                    {/* Heart icon */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        alert(`Veículo ${vehicle.title} adicionado aos favoritos!`);
-                      }}
-                      className="absolute top-3 left-3 w-8 h-8 rounded-full bg-white/80 hover:bg-white text-slate-600 hover:text-red-500 flex items-center justify-center transition-colors shadow-sm"
-                    >
-                      <IconHeart size={16} />
-                    </button>
-                  </div>
-
-                  {/* Body content */}
-                  <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                    <div>
-                      <div className="text-[11px] text-slate-400 font-medium mb-1">
-                        {vehicle.year} • {vehicle.mileage}
-                      </div>
-                      <h3 className="font-bold text-sm text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-1">
-                        {vehicle.title}
-                      </h3>
-                      <div className="text-[11px] text-slate-500 mt-1">
-                        {vehicle.transmission} • {vehicle.fuel} • {vehicle.color}
-                      </div>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-100 flex items-baseline justify-between">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">À vista</span>
-                        <span className="text-base font-extrabold text-blue-600">
-                          R$ {vehicle.price.toLocaleString('pt-BR')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* PAGINATION BAR */}
-            <div className="flex flex-col sm:flex-row items-center justify-between pt-4 border-t border-slate-200 text-xs text-slate-500 gap-4">
-              <span>Mostrando <strong>1-6</strong> de <strong>124</strong> veículos</span>
-
-              <div className="flex items-center gap-1.5">
-                <button className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 flex items-center justify-center font-semibold">
-                  <IconChevronLeft size={16} />
-                </button>
-                <button className="w-8 h-8 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center shadow-sm">
-                  1
-                </button>
-                <button className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 font-semibold flex items-center justify-center">
-                  2
-                </button>
-                <button className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 font-semibold flex items-center justify-center">
-                  3
-                </button>
-                <span className="px-1 text-slate-400">...</span>
-                <button className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 font-semibold flex items-center justify-center">
-                  21
-                </button>
-                <button className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 flex items-center justify-center font-semibold">
-                  <IconChevronRight size={16} />
+                  Limpar todos os filtros
                 </button>
               </div>
-            </div>
+            ) : (
+              /* 3x2 Grid of Cards */
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {vehicles.map((vehicle) => (
+                  <div
+                    key={vehicle.id}
+                    onClick={() => onSelectVehicle(vehicle)}
+                    className="bg-white rounded-2xl overflow-hidden border border-slate-200/90 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between cursor-pointer group"
+                  >
+                    {/* Image header */}
+                    <div className="relative h-44 overflow-hidden bg-slate-100">
+                      <img
+                        src={vehicle.mainImage}
+                        alt={vehicle.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+
+                      {/* Location Badge top right */}
+                      <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-md text-[10px] font-bold text-slate-800 flex items-center gap-1 shadow-sm">
+                        <IconMapPin size={11} className="text-blue-600" />
+                        <span>{vehicle.location.split(' - ')[0]}</span>
+                      </div>
+
+                      {/* FIPE Badge bottom left */}
+                      {vehicle.fipeBadge && (
+                        <div className="absolute bottom-3 left-3 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
+                          {vehicle.fipeBadge}
+                        </div>
+                      )}
+
+                      {/* Heart icon */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleFavorite?.(vehicle.id);
+                        }}
+                        className={`absolute top-3 left-3 w-8 h-8 rounded-full shadow-sm flex items-center justify-center transition-all ${
+                          favoriteIds.includes(vehicle.id)
+                            ? 'bg-white text-red-500 scale-105'
+                            : 'bg-white/80 hover:bg-white text-slate-600 hover:text-red-500'
+                        }`}
+                        title={favoriteIds.includes(vehicle.id) ? 'Remover dos favoritos' : 'Favoritar'}
+                      >
+                        <IconHeart
+                          size={16}
+                          className={favoriteIds.includes(vehicle.id) ? 'fill-red-500 text-red-500' : ''}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Body content */}
+                    <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="text-[11px] text-slate-400 font-medium mb-1">
+                          {vehicle.year} • {vehicle.mileage}
+                        </div>
+                        <h3 className="font-bold text-sm text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-1">
+                          {vehicle.title}
+                        </h3>
+                        <div className="text-[11px] text-slate-500 mt-1">
+                          {vehicle.transmission} • {vehicle.fuel} • {vehicle.color}
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 flex items-baseline justify-between">
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">À vista</span>
+                          <span className="text-base font-extrabold text-blue-600">
+                            R$ {vehicle.price.toLocaleString('pt-BR')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* PAGINATION BAR */}
+            {totalResults > ITEMS_PER_PAGE && (
+              <div className="flex flex-col sm:flex-row items-center justify-between pt-4 border-t border-slate-200 text-xs text-slate-500 gap-4">
+                <span>
+                  Mostrando <strong>{startItem}-{endItem}</strong> de <strong>{totalResults}</strong> veículos
+                </span>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 flex items-center justify-center font-semibold disabled:opacity-40"
+                  >
+                    <IconChevronLeft size={16} />
+                  </button>
+
+                  {getPageNumbers().map((page, idx) =>
+                    page === '...' ? (
+                      <span key={`dots-${idx}`} className="px-1 text-slate-400">
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-8 h-8 rounded-lg font-semibold flex items-center justify-center ${
+                          currentPage === page
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-white border border-slate-200 hover:bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    )
+                  )}
+
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 flex items-center justify-center font-semibold disabled:opacity-40"
+                  >
+                    <IconChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* SEARCH ALERT BANNER */}
             <div className="bg-indigo-50/70 rounded-3xl p-6 sm:p-8 border border-indigo-100 text-slate-900 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">

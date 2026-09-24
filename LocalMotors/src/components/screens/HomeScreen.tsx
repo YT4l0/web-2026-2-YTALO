@@ -13,11 +13,18 @@ import {
 } from '../icons/Icons';
 
 interface HomeScreenProps {
+  favoriteIds?: string[];
+  onToggleFavorite?: (vehicleId: string) => void;
   onNavigate: (screen: ScreenType) => void;
   onSelectVehicle: (vehicle: Vehicle) => void;
 }
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onSelectVehicle }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({
+  favoriteIds = [],
+  onToggleFavorite,
+  onNavigate,
+  onSelectVehicle,
+}) => {
   const [selectedCity, setSelectedCity] = useState('Pau dos Ferros - RN');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [searchModel, setSearchModel] = useState('');
@@ -247,10 +254,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onSelectVehi
 
                 {/* Favorite heart icon top right */}
                 <button
-                  className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/90 text-slate-700 hover:text-red-500 flex items-center justify-center shadow-md transition-colors z-10"
-                  title="Favoritar"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleFavorite?.(vehicle.id);
+                  }}
+                  className={`absolute top-3 right-3 w-9 h-9 rounded-full shadow-md flex items-center justify-center transition-all z-10 ${
+                    favoriteIds.includes(vehicle.id)
+                      ? 'bg-white text-red-500 scale-105'
+                      : 'bg-white/90 text-slate-700 hover:text-red-500'
+                  }`}
+                  title={favoriteIds.includes(vehicle.id) ? 'Remover dos favoritos' : 'Favoritar'}
                 >
-                  <IconHeart size={18} />
+                  <IconHeart
+                    size={18}
+                    className={favoriteIds.includes(vehicle.id) ? 'fill-red-500 text-red-500' : ''}
+                  />
                 </button>
               </div>
 
@@ -318,7 +336,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onSelectVehi
 
             <div className="pt-6 z-10">
               <button
-                onClick={() => onNavigate('search')}
+                onClick={() => onNavigate('login')}
                 className="w-full py-3 px-4 bg-white hover:bg-slate-100 text-blue-950 text-xs font-bold rounded-xl shadow-md transition-colors text-center"
               >
                 Anunciar Grátis

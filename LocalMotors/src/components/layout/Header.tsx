@@ -4,10 +4,11 @@ import { IconUser } from '../icons/Icons';
 
 interface HeaderProps {
   currentScreen: ScreenType;
+  favoriteCount?: number;
   onNavigate: (screen: ScreenType) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentScreen, onNavigate }) => {
+export const Header: React.FC<HeaderProps> = ({ currentScreen, favoriteCount = 0, onNavigate }) => {
   // If we are on the login screen, we render a minimal custom header or the unified navy header
   return (
     <header className="bg-[#0b1329] text-white border-b border-slate-800/80 sticky top-0 z-50 shadow-md">
@@ -47,10 +48,19 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNavigate }) => 
               Vender veículo
             </button>
             <button
-              onClick={() => onNavigate('search')}
-              className="text-slate-300 hover:text-white transition-colors py-2"
+              onClick={() => onNavigate('favorites')}
+              className={`transition-colors py-2 border-b-2 flex items-center gap-1.5 ${
+                currentScreen === 'favorites'
+                  ? 'text-blue-400 border-blue-500'
+                  : 'text-slate-300 border-transparent hover:text-white'
+              }`}
             >
               Favoritos
+              {favoriteCount > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-extrabold px-1.5 py-0.2 rounded-full min-w-[18px] text-center">
+                  {favoriteCount}
+                </span>
+              )}
             </button>
             <button
               onClick={() => onNavigate('home')}
@@ -73,7 +83,7 @@ export const Header: React.FC<HeaderProps> = ({ currentScreen, onNavigate }) => 
               Entrar
             </button>
             <button
-              onClick={() => onNavigate('login')}
+              onClick={() => onNavigate('register')}
               className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all shadow-md shadow-blue-600/30 hover:shadow-blue-500/40 active:scale-95"
             >
               Criar conta

@@ -12,16 +12,21 @@ import {
 
 interface DetailScreenProps {
   vehicle?: Vehicle;
+  favoriteIds?: string[];
+  onToggleFavorite?: (vehicleId: string) => void;
   onNavigate: (screen: ScreenType) => void;
 }
 
 export const DetailScreen: React.FC<DetailScreenProps> = ({
   vehicle = MOCK_VEHICLES[0],
+  favoriteIds = [],
+  onToggleFavorite,
   onNavigate,
 }) => {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [isFavorited, setIsFavorited] = useState(false);
   const [showInterestModal, setShowInterestModal] = useState(false);
+
+  const isFavorited = favoriteIds.includes(vehicle.id);
 
   const images = vehicle.gallery && vehicle.gallery.length > 0 ? vehicle.gallery : [vehicle.mainImage];
 
@@ -70,13 +75,13 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({
 
                 {/* Heart Button Top Right */}
                 <button
-                  onClick={() => setIsFavorited(!isFavorited)}
-                  className={`absolute top-4 right-4 w-10 h-10 rounded-full bg-white/90 shadow-md flex items-center justify-center transition-colors z-10 ${
-                    isFavorited ? 'text-red-500 fill-red-500' : 'text-slate-700 hover:text-red-500'
+                  onClick={() => onToggleFavorite?.(vehicle.id)}
+                  className={`absolute top-4 right-4 w-10 h-10 rounded-full shadow-md flex items-center justify-center transition-all z-10 ${
+                    isFavorited ? 'bg-white text-red-500 scale-105' : 'bg-white/90 text-slate-700 hover:text-red-500'
                   }`}
-                  title="Favoritar"
+                  title={isFavorited ? 'Remover dos favoritos' : 'Favoritar'}
                 >
-                  <IconHeart size={20} />
+                  <IconHeart size={20} className={isFavorited ? 'fill-red-500 text-red-500' : ''} />
                 </button>
               </div>
 
@@ -189,13 +194,15 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({
               {/* Secondary actions */}
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <button
-                  onClick={() => setIsFavorited(!isFavorited)}
-                  className={`py-2.5 px-3 rounded-xl border border-slate-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
-                    isFavorited ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  onClick={() => onToggleFavorite?.(vehicle.id)}
+                  className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
+                    isFavorited
+                      ? 'bg-red-50 text-red-600 border-red-200'
+                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200'
                   }`}
                 >
-                  <IconHeart size={16} />
-                  Favoritar
+                  <IconHeart size={16} className={isFavorited ? 'fill-red-500 text-red-500' : ''} />
+                  {isFavorited ? 'Salvo nos favoritos' : 'Favoritar'}
                 </button>
 
                 <button
