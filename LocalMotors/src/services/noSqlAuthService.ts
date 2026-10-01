@@ -2,10 +2,12 @@ export interface UserDocument {
   _id: string;
   email: string;
   phone?: string;
+  city?: string;
   passwordHash: string;
   name: string;
   accountType: 'pf' | 'pj';
   createdAt: string;
+  isConfirmed?: boolean;
 }
 
 const NOSQL_USERS_KEY = 'motorlocal_nosql_users_collection';
@@ -20,6 +22,17 @@ const INITIAL_USERS: UserDocument[] = [
     name: 'Walber',
     accountType: 'pf',
     createdAt: new Date().toISOString(),
+    isConfirmed: true,
+  },
+  {
+    _id: 'doc_pendente_2026',
+    email: 'pendente@gmail.com',
+    phone: '(84) 98888-5678',
+    passwordHash: 'pendente123',
+    name: 'Usuário Pendente',
+    accountType: 'pf',
+    createdAt: new Date().toISOString(),
+    isConfirmed: false,
   },
 ];
 
@@ -86,6 +99,7 @@ export async function noSqlInsertUser(
 
   const newDoc: UserDocument = {
     ...user,
+    isConfirmed: user.isConfirmed ?? false,
     _id: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     createdAt: new Date().toISOString(),
   };
@@ -93,6 +107,23 @@ export async function noSqlInsertUser(
   collection.push(newDoc);
   saveCollection(collection);
   return newDoc;
+}
+
+/**
+ * Toggles or updates user confirmation status for mock demonstration.
+ */
+export function toggleUserConfirmation(userId: string): UserDocument | null {
+  const collection = getCollection();
+  const index = collection.findIndex((u) => u._id === userId);
+  if (index === -1) return null;
+  collection[index].isConfirmed = !collection[index].isConfirmed;
+  saveCollection(collection);
+  const active = getActiveSession();
+  if (active && active._id === userId) {
+    active.isConfirmed = collection[index].isConfirmed;
+    setActiveSession(active);
+  }
+  return collection[index];
 }
 
 /**

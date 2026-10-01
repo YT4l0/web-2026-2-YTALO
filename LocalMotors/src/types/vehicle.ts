@@ -1,4 +1,4 @@
-export type ScreenType = 'home' | 'search' | 'detail' | 'login' | 'register' | 'favorites' | 'publish';
+export type ScreenType = 'home' | 'search' | 'detail' | 'login' | 'register' | 'favorites' | 'publish' | 'seller';
 
 export interface Vehicle {
   id: string;
@@ -24,6 +24,12 @@ export interface Vehicle {
     initials: string;
     description: string;
     verified: boolean;
+    avatar?: string;
+    rating?: number;
+    phone?: string;
+    totalVehicles?: number;
+    address?: string;
+    timeOnPlatform?: string;
   };
   description: string;
   featured?: boolean;
