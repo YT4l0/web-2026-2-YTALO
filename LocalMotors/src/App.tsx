@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { ScreenType, Vehicle } from './types/vehicle';
 import { MOCK_VEHICLES } from './data/mockVehicles';
-import { getActiveSession, setActiveSession } from './services/noSqlAuthService';
-import type { UserDocument } from './services/noSqlAuthService';
+import { useAuth } from './context/AuthContext';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { HomeScreen } from './components/screens/HomeScreen';
@@ -15,17 +14,22 @@ import { RegisterScreen } from './components/screens/RegisterScreen';
 import { FavoritesScreen } from './components/screens/FavoritesScreen';
 
 export function App() {
+  const { user, isAuthenticated, signOut } = useAuth();
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('home');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle>(MOCK_VEHICLES[0]);
   const [selectedSellerName, setSelectedSellerName] = useState<string>('Carlos Motors');
-  const [favoriteIds, setFavoriteIds] = useState<string[]>(['corolla-xei-2021', 'strada-freedom-2021']);
-  const [currentUser, setCurrentUser] = useState<UserDocument | null>(null);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
 
-  // Sincronizar sessão ativa ao iniciar
+  // Ao concluir redirect do Cognito Hosted UI, navega para 'home'
   useEffect(() => {
-    const session = getActiveSession();
-    setCurrentUser(session);
-  }, []);
+    if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      const timer = setTimeout(() => {
+        setCurrentScreen('home');
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated]);
 
   const handleSelectVehicle = (vehicle: Vehicle) => {
     setSelectedVehicle(vehicle);
@@ -40,8 +44,8 @@ export function App() {
   };
 
   const handleNavigate = (screen: ScreenType) => {
-    // Se o usuário clicar em 'publish' sem estar logado, redireciona para login
-    if (screen === 'publish' && !currentUser) {
+    // Rotas protegidas (publicar anúncio, favoritos persistentes) exigem isAuthenticated
+    if ((screen === 'publish' || screen === 'favorites') && !isAuthenticated) {
       setCurrentScreen('login');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -51,22 +55,25 @@ export function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleLoginSuccess = (user: UserDocument) => {
-    setCurrentUser(user);
-    // Se logou com sucesso, direciona para o marketplace ou para publicação se veio dessa intenção
-    setCurrentScreen('publish');
+  const handleLoginSuccess = () => {
+    setCurrentScreen('home');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleLogout = () => {
-    setActiveSession(null);
-    setCurrentUser(null);
-    if (currentScreen === 'publish') {
+  const handleLogout = async () => {
+    await signOut();
+    if (currentScreen === 'publish' || currentScreen === 'favorites') {
       setCurrentScreen('home');
     }
   };
 
   const handleToggleFavorite = (vehicleId: string) => {
+    if (!isAuthenticated) {
+      setCurrentScreen('login');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     setFavoriteIds((prev) =>
       prev.includes(vehicleId)
         ? prev.filter((id) => id !== vehicleId)
@@ -83,7 +90,7 @@ export function App() {
         <Header
           currentScreen={currentScreen}
           favoriteCount={favoriteIds.length}
-          currentUser={currentUser}
+          currentUser={user}
           onNavigate={handleNavigate}
           onLogout={handleLogout}
           onViewSeller={handleViewSeller}

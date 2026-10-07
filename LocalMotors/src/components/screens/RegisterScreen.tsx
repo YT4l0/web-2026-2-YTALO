@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { ScreenType } from '../../types/vehicle';
 import { noSqlInsertUser, setActiveSession } from '../../services/noSqlAuthService';
+import { useAuth } from '../../context/AuthContext';
 import {
   IconEye,
   IconEyeOff,
@@ -10,6 +11,7 @@ import {
   IconCheck,
   IconUser,
   IconCar,
+  IconGoogle,
 } from '../icons/Icons';
 
 interface RegisterScreenProps {
@@ -50,6 +52,8 @@ const ESTADOS_BR = [
 ];
 
 export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
+  const { signInWithGoogle, syncMockUserLogin, authMode, configError } = useAuth();
+
   // Account Type
   const [accountType, setAccountType] = useState<'pf' | 'pj'>('pf');
 
@@ -71,6 +75,8 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
 
   // Form State
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
@@ -137,8 +143,28 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
     return Object.keys(newErrors).length === 0;
   };
 
+  const handleGoogleSignUp = async () => {
+    setGoogleError('');
+    setIsGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+      if (authMode === 'mock') {
+        onNavigate('home');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Falha ao autenticar com o Google.';
+      setGoogleError(msg);
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (authMode === 'cognito') {
+      return;
+    }
+
     setTouched({
       fullName: true,
       responsibleName: true,
@@ -164,6 +190,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
         });
 
         setActiveSession(newDoc);
+        syncMockUserLogin(newDoc);
         setIsLoading(false);
         alert(`Conta do usuário "${newDoc.name}" registrada com sucesso na coleção NoSQL!`);
         onNavigate('search');
@@ -187,9 +214,8 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
             {CAROUSEL_SLIDES.map((slide, index) => (
               <div
                 key={slide.id}
-                className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-                  index === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                }`}
+                className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
               >
                 <img
                   src={slide.image}
@@ -262,11 +288,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                   type="button"
                   key={slide.id}
                   onClick={() => setCurrentSlide(index)}
-                  className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
-                    index === currentSlide
+                  className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${index === currentSlide
                       ? 'w-10 bg-blue-500'
                       : 'w-4 bg-slate-600/80 hover:bg-slate-400'
-                  }`}
+                    }`}
                   title={`Ir para slide ${index + 1}`}
                 />
               ))}
@@ -293,6 +318,28 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
             </p>
           </div>
 
+          {/* Mode Banner & Warnings */}
+          {authMode === 'cognito' && (
+            <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/40 text-xs text-blue-200">
+              <span className="font-bold">Modo AWS Cognito:</span> O cadastro tradicional local está desabilitado. Utilize o botão <strong>Continuar com Google</strong> abaixo.
+            </div>
+          )}
+
+          {configError && (
+            <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-500/50 text-xs text-amber-300 flex items-start gap-2">
+              <span className="font-bold shrink-0">⚠️</span>
+              <span>{configError}</span>
+            </div>
+          )}
+
+          {googleError && (
+            <div className="p-3 rounded-xl bg-red-950/30 border border-red-500/50 text-xs text-red-300 flex items-start gap-2">
+              <span className="font-bold shrink-0">⚠️</span>
+              <span>{googleError}</span>
+            </div>
+          )}
+
+          {/* TODO: Cadastro direto por e-mail/senha via AWS Cognito User Pool é uma etapa futura. */}
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* ACCOUNT TYPE SELECTION (Pessoa Física vs Revendedora) */}
             <div className="space-y-2">
@@ -308,20 +355,18 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                     setAccountType('pf');
                     setErrors({});
                   }}
-                  className={`p-3.5 rounded-xl border text-left transition-all duration-200 flex flex-col justify-between cursor-pointer ${
-                    accountType === 'pf'
+                  className={`p-3.5 rounded-xl border text-left transition-all duration-200 flex flex-col justify-between cursor-pointer ${accountType === 'pf'
                       ? 'bg-[#141e36] border-blue-500 shadow-md shadow-blue-600/10'
                       : 'bg-[#141e36]/50 border-slate-700/70 hover:border-slate-600'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-bold text-white flex items-center gap-1.5">
                       <IconUser size={15} className={accountType === 'pf' ? 'text-blue-400' : 'text-slate-400'} />
                       Pessoa Física
                     </span>
-                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                      accountType === 'pf' ? 'border-blue-500 bg-blue-600' : 'border-slate-600'
-                    }`}>
+                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${accountType === 'pf' ? 'border-blue-500 bg-blue-600' : 'border-slate-600'
+                      }`}>
                       {accountType === 'pf' && <IconCheck size={10} className="text-white" />}
                     </div>
                   </div>
@@ -337,20 +382,18 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                     setAccountType('pj');
                     setErrors({});
                   }}
-                  className={`p-3.5 rounded-xl border text-left transition-all duration-200 flex flex-col justify-between cursor-pointer ${
-                    accountType === 'pj'
+                  className={`p-3.5 rounded-xl border text-left transition-all duration-200 flex flex-col justify-between cursor-pointer ${accountType === 'pj'
                       ? 'bg-[#141e36] border-blue-500 shadow-md shadow-blue-600/10'
                       : 'bg-[#141e36]/50 border-slate-700/70 hover:border-slate-600'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-bold text-white flex items-center gap-1.5">
                       <IconCar size={15} className={accountType === 'pj' ? 'text-blue-400' : 'text-slate-400'} />
                       Revendedora
                     </span>
-                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                      accountType === 'pj' ? 'border-blue-500 bg-blue-600' : 'border-slate-600'
-                    }`}>
+                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${accountType === 'pj' ? 'border-blue-500 bg-blue-600' : 'border-slate-600'
+                      }`}>
                       {accountType === 'pj' && <IconCheck size={10} className="text-white" />}
                     </div>
                   </div>
@@ -377,11 +420,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                       if (errors.fullName) setErrors({ ...errors, fullName: '' });
                     }}
                     placeholder="Digite seu nome completo"
-                    className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${
-                      touched.fullName && errors.fullName
+                    className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${touched.fullName && errors.fullName
                         ? 'border-red-500/80 bg-red-950/10'
                         : 'border-slate-700/80 focus:border-blue-500'
-                    }`}
+                      }`}
                   />
                   {touched.fullName && errors.fullName && (
                     <span className="text-[11px] text-red-400 font-medium block">
@@ -407,11 +449,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                           if (errors.responsibleName) setErrors({ ...errors, responsibleName: '' });
                         }}
                         placeholder="Digite o nome do responsável"
-                        className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${
-                          touched.responsibleName && errors.responsibleName
+                        className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${touched.responsibleName && errors.responsibleName
                             ? 'border-red-500/80 bg-red-950/10'
                             : 'border-slate-700/80 focus:border-blue-500'
-                        }`}
+                          }`}
                       />
                       {touched.responsibleName && errors.responsibleName && (
                         <span className="text-[11px] text-red-400 font-medium block">
@@ -432,11 +473,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                           if (errors.dealershipName) setErrors({ ...errors, dealershipName: '' });
                         }}
                         placeholder="Digite o nome da revendedora"
-                        className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${
-                          touched.dealershipName && errors.dealershipName
+                        className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${touched.dealershipName && errors.dealershipName
                             ? 'border-red-500/80 bg-red-950/10'
                             : 'border-slate-700/80 focus:border-blue-500'
-                        }`}
+                          }`}
                       />
                       {touched.dealershipName && errors.dealershipName && (
                         <span className="text-[11px] text-red-400 font-medium block">
@@ -458,11 +498,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                         if (errors.cnpj) setErrors({ ...errors, cnpj: '' });
                       }}
                       placeholder="00.000.000/0000-00"
-                      className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${
-                        touched.cnpj && errors.cnpj
+                      className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${touched.cnpj && errors.cnpj
                           ? 'border-red-500/80 bg-red-950/10'
                           : 'border-slate-700/80 focus:border-blue-500'
-                      }`}
+                        }`}
                     />
                     {touched.cnpj && errors.cnpj && (
                       <span className="text-[11px] text-red-400 font-medium block">
@@ -487,11 +526,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                       if (errors.email) setErrors({ ...errors, email: '' });
                     }}
                     placeholder="Digite seu e-mail"
-                    className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${
-                      touched.email && errors.email
+                    className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${touched.email && errors.email
                         ? 'border-red-500/80 bg-red-950/10'
                         : 'border-slate-700/80 focus:border-blue-500'
-                    }`}
+                      }`}
                   />
                   {touched.email && errors.email && (
                     <span className="text-[11px] text-red-400 font-medium block">
@@ -512,11 +550,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                       if (errors.phone) setErrors({ ...errors, phone: '' });
                     }}
                     placeholder="(00) 00000-0000"
-                    className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${
-                      touched.phone && errors.phone
+                    className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${touched.phone && errors.phone
                         ? 'border-red-500/80 bg-red-950/10'
                         : 'border-slate-700/80 focus:border-blue-500'
-                    }`}
+                      }`}
                   />
                   {touched.phone && errors.phone && (
                     <span className="text-[11px] text-red-400 font-medium block">
@@ -540,11 +577,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                       if (errors.city) setErrors({ ...errors, city: '' });
                     }}
                     placeholder="Digite sua cidade"
-                    className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${
-                      touched.city && errors.city
+                    className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors ${touched.city && errors.city
                         ? 'border-red-500/80 bg-red-950/10'
                         : 'border-slate-700/80 focus:border-blue-500'
-                    }`}
+                      }`}
                   />
                   {touched.city && errors.city && (
                     <span className="text-[11px] text-red-400 font-medium block">
@@ -587,11 +623,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                         if (errors.password) setErrors({ ...errors, password: '' });
                       }}
                       placeholder="Crie uma senha"
-                      className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder-slate-500 outline-none transition-colors ${
-                        touched.password && errors.password
+                      className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder-slate-500 outline-none transition-colors ${touched.password && errors.password
                           ? 'border-red-500/80 bg-red-950/10'
                           : 'border-slate-700/80 focus:border-blue-500'
-                      }`}
+                        }`}
                     />
                     <button
                       type="button"
@@ -617,11 +652,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                         if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: '' });
                       }}
                       placeholder="Confirme sua senha"
-                      className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder-slate-500 outline-none transition-colors ${
-                        touched.confirmPassword && errors.confirmPassword
+                      className={`w-full bg-[#141e36] border rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder-slate-500 outline-none transition-colors ${touched.confirmPassword && errors.confirmPassword
                           ? 'border-red-500/80 bg-red-950/10'
                           : 'border-slate-700/80 focus:border-blue-500'
-                      }`}
+                        }`}
                     />
                     <button
                       type="button"
@@ -671,8 +705,8 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
             {/* SUBMIT BUTTON */}
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full bg-blue-600 hover:bg-blue-500 active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all"
+              disabled={authMode === 'cognito' || isLoading}
+              className="w-full bg-blue-600 hover:bg-blue-500 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all"
             >
               {isLoading ? (
                 <>
@@ -688,6 +722,26 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
                   <IconArrowRight size={18} />
                 </>
               )}
+            </button>
+
+            {/* Social Divider */}
+            <div className="relative flex items-center justify-center my-2">
+              <div className="border-t border-slate-800 w-full" />
+              <span className="bg-[#0d1527] px-3 text-[11px] uppercase tracking-wider font-semibold text-slate-500 whitespace-nowrap">
+                ou cadastre-se com
+              </span>
+              <div className="border-t border-slate-800 w-full" />
+            </div>
+
+            {/* Google Button */}
+            <button
+              type="button"
+              onClick={handleGoogleSignUp}
+              disabled={isGoogleLoading || isLoading}
+              className="w-full bg-[#141e36] hover:bg-slate-800 text-slate-200 text-xs font-semibold py-3 px-4 rounded-xl border border-slate-700/60 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+            >
+              <IconGoogle size={18} />
+              <span>{isGoogleLoading ? 'Conectando ao Google...' : 'Continuar com Google'}</span>
             </button>
           </form>
 

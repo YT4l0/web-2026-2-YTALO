@@ -5,6 +5,7 @@ import {
   setActiveSession,
 } from '../../services/noSqlAuthService';
 import type { UserDocument } from '../../services/noSqlAuthService';
+import { useAuth } from '../../context/AuthContext';
 import {
   IconEye,
   IconEyeOff,
@@ -49,6 +50,7 @@ const CAROUSEL_SLIDES = [
 ];
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuccess }) => {
+  const { signInWithGoogle, syncMockUserLogin, authMode, configError } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -56,6 +58,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
 
   // Auth States
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [authSuccess, setAuthSuccess] = useState('');
 
@@ -79,13 +82,33 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
   };
 
   const handleQuickFill = () => {
-    setEmailOrPhone('auladewalber@gmail.com');
-    setPassword('aula123');
+    setEmailOrPhone('mock@example.com');
+    setPassword('mock_password_dev');
     setAuthError('');
+  };
+
+  const handleGoogleSignIn = async () => {
+    setAuthError('');
+    setIsGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+      if (authMode === 'mock') {
+        onNavigate('home');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Falha ao autenticar com o Google.';
+      setAuthError(msg);
+    } finally {
+      setIsGoogleLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (authMode === 'cognito') {
+      return;
+    }
+
     setAuthError('');
     setAuthSuccess('');
     setIsLoading(true);
@@ -96,6 +119,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
 
       if (userDoc) {
         setActiveSession(userDoc);
+        syncMockUserLogin(userDoc);
         onLoginSuccess?.(userDoc);
 
         setTimeout(() => {
@@ -104,6 +128,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
         }, 1200);
       } else {
         setIsLoading(false);
+        setAuthError('E-mail, telefone ou senha inválidos.');
       }
     } catch (err) {
       console.error(err);
@@ -232,17 +257,34 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
             </p>
           </div>
 
-          {/* Quick Credential Test Helper Pill */}
-          <div className="flex items-center justify-between p-2.5 rounded-xl bg-blue-950/40 border border-blue-800/40 text-xs">
-            <span className="text-slate-400">Conta demo de teste:</span>
-            <button
-              type="button"
-              onClick={handleQuickFill}
-              className="text-blue-400 hover:text-blue-300 font-semibold px-2 py-0.5 rounded bg-blue-900/50 hover:bg-blue-900/80 transition-colors"
-            >
-              Preencher dados
-            </button>
-          </div>
+          {/* Quick Credential Test Helper Pill (Mock mode only) */}
+          {authMode === 'mock' && (
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-blue-950/40 border border-blue-800/40 text-xs">
+              <span className="text-slate-400">Conta demo de teste (Mock):</span>
+              <button
+                type="button"
+                onClick={handleQuickFill}
+                className="text-blue-400 hover:text-blue-300 font-semibold px-2 py-0.5 rounded bg-blue-900/50 hover:bg-blue-900/80 transition-colors"
+              >
+                Preencher dados
+              </button>
+            </div>
+          )}
+
+          {/* Cognito Mode Indicator / Info */}
+          {authMode === 'cognito' && (
+            <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/40 text-xs text-blue-200">
+              <span className="font-bold">Modo AWS Cognito:</span> O login por e-mail/senha local está desabilitado. Utilize o botão <strong>Continuar com Google</strong> abaixo.
+            </div>
+          )}
+
+          {/* Config Error Banner */}
+          {configError && (
+            <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-500/50 text-xs text-amber-300 flex items-start gap-2 animate-in fade-in">
+              <span className="font-bold shrink-0">⚠️</span>
+              <span>{configError}</span>
+            </div>
+          )}
 
           {/* Error Banner */}
           {authError && (
@@ -261,6 +303,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
           )}
 
           {/* Form */}
+          {/* TODO: Implementar autenticação direta por e-mail e senha via AWS Cognito SRP/User Pool em etapa futura. */}
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* E-mail / Phone */}
             <div className="space-y-1.5">
@@ -270,13 +313,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
               <input
                 type="text"
                 required
+                disabled={authMode === 'cognito' || isLoading}
                 value={emailOrPhone}
                 onChange={(e) => {
                   setEmailOrPhone(e.target.value);
                   setAuthError('');
                 }}
                 placeholder="ex: voce@email.com ou (84) 99999-0000"
-                className="w-full bg-[#141e36] border border-slate-700/80 focus:border-blue-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors"
+                className="w-full bg-[#141e36] border border-slate-700/80 focus:border-blue-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -297,13 +341,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
+                  disabled={authMode === 'cognito' || isLoading}
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
                     setAuthError('');
                   }}
                   placeholder="Digite sua senha de acesso"
-                  className="w-full bg-[#141e36] border border-slate-700/80 focus:border-blue-500 rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder-slate-500 outline-none transition-colors"
+                  className="w-full bg-[#141e36] border border-slate-700/80 focus:border-blue-500 rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder-slate-500 outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <button
                   type="button"
@@ -321,8 +366,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                 type="checkbox"
                 id="remember"
                 checked={rememberMe}
+                disabled={authMode === 'cognito'}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded bg-[#141e36] border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                className="mt-0.5 w-4 h-4 rounded bg-[#141e36] border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-50"
               />
               <label htmlFor="remember" className="text-xs text-slate-300 leading-tight cursor-pointer">
                 Manter conectado e concordar com os{' '}
@@ -333,8 +379,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full bg-blue-600 hover:bg-blue-500 active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all"
+              disabled={authMode === 'cognito' || isLoading}
+              className="w-full bg-blue-600 hover:bg-blue-500 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all"
             >
               {isLoading ? (
                 <>
@@ -363,18 +409,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
           </div>
 
           {/* Social Buttons */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               type="button"
-              className="bg-[#141e36] hover:bg-slate-800 text-slate-200 text-xs font-semibold py-2.5 px-4 rounded-xl border border-slate-700/60 flex items-center justify-center gap-2 transition-colors"
+              onClick={handleGoogleSignIn}
+              disabled={isGoogleLoading || isLoading}
+              className="bg-[#141e36] hover:bg-slate-800 text-slate-200 text-xs font-semibold py-2.5 px-4 rounded-xl border border-slate-700/60 flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
             >
               <IconGoogle size={16} />
-              Google
+              <span>{isGoogleLoading ? 'Conectando...' : 'Continuar com Google'}</span>
             </button>
 
             <button
               type="button"
-              className="bg-[#141e36] hover:bg-slate-800 text-slate-200 text-xs font-semibold py-2.5 px-4 rounded-xl border border-slate-700/60 flex items-center justify-center gap-2 transition-colors"
+              disabled
+              className="bg-[#141e36]/50 text-slate-500 text-xs font-semibold py-2.5 px-4 rounded-xl border border-slate-800 flex items-center justify-center gap-2 cursor-not-allowed"
             >
               <IconApple size={16} />
               Apple ID
