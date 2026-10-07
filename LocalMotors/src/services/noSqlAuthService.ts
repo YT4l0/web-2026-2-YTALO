@@ -13,23 +13,25 @@ export interface UserDocument {
 const NOSQL_USERS_KEY = 'motorlocal_nosql_users_collection';
 const NOSQL_SESSION_KEY = 'motorlocal_nosql_current_session';
 
+// ATENÇÃO: Usuários fictícios exclusivamente para o modo MOCK em desenvolvimento local.
+// Nunca utilize credenciais reais ou dados sensíveis aqui.
 const INITIAL_USERS: UserDocument[] = [
   {
-    _id: 'doc_walber_2026',
-    email: 'auladewalber@gmail.com',
-    phone: '(84) 99999-1234',
-    passwordHash: 'aula123',
-    name: 'Walber',
+    _id: 'doc_mock_user_1',
+    email: 'mock@example.com',
+    phone: '(84) 99999-0000',
+    passwordHash: 'mock_password_dev',
+    name: 'Usuário Demonstração',
     accountType: 'pf',
     createdAt: new Date().toISOString(),
     isConfirmed: true,
   },
   {
-    _id: 'doc_pendente_2026',
-    email: 'pendente@gmail.com',
-    phone: '(84) 98888-5678',
-    passwordHash: 'pendente123',
-    name: 'Usuário Pendente',
+    _id: 'doc_mock_user_2',
+    email: 'pendente@example.com',
+    phone: '(84) 98888-0000',
+    passwordHash: 'mock_password_dev',
+    name: 'Usuário Pendente Demo',
     accountType: 'pf',
     createdAt: new Date().toISOString(),
     isConfirmed: false,

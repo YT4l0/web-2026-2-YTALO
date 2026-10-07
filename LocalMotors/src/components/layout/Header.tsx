@@ -1,12 +1,13 @@
 import React from 'react';
 import type { ScreenType } from '../../types/vehicle';
 import type { UserDocument } from '../../services/noSqlAuthService';
+import type { AuthUser } from '../../services/auth/types';
 import { IconUser, IconCheck } from '../icons/Icons';
 
 interface HeaderProps {
   currentScreen: ScreenType;
   favoriteCount?: number;
-  currentUser?: UserDocument | null;
+  currentUser?: AuthUser | UserDocument | null;
   onNavigate: (screen: ScreenType) => void;
   onLogout?: () => void;
   onViewSeller?: (sellerName: string) => void;
@@ -23,6 +24,14 @@ export const Header: React.FC<HeaderProps> = ({
   const handleSellVehicleClick = () => {
     if (currentUser) {
       onNavigate('publish');
+    } else {
+      onNavigate('login');
+    }
+  };
+
+  const handleFavoritesClick = () => {
+    if (currentUser) {
+      onNavigate('favorites');
     } else {
       onNavigate('login');
     }
@@ -75,10 +84,10 @@ export const Header: React.FC<HeaderProps> = ({
                   : 'text-slate-300 border-transparent hover:text-white'
               }`}
             >
-              Vender Veículo
+              Anunciar
             </button>
             <button
-              onClick={() => onNavigate('favorites')}
+              onClick={handleFavoritesClick}
               className={`transition-colors py-2 border-b-2 flex items-center gap-1.5 ${
                 currentScreen === 'favorites'
                   ? 'text-blue-400 border-blue-500'
@@ -113,8 +122,18 @@ export const Header: React.FC<HeaderProps> = ({
                   className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 transition-colors text-left"
                   title="Ver meu perfil e anúncios"
                 >
-                  <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center">
-                    {currentUser.name ? currentUser.name[0].toUpperCase() : 'U'}
+                  <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center overflow-hidden shrink-0">
+                    {'picture' in currentUser && currentUser.picture ? (
+                      <img
+                        src={currentUser.picture}
+                        alt={currentUser.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : currentUser.name ? (
+                      currentUser.name[0].toUpperCase()
+                    ) : (
+                      'U'
+                    )}
                   </div>
                   <div className="hidden sm:flex flex-col">
                     <span className="text-xs font-semibold text-white leading-none">

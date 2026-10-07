@@ -4,6 +4,7 @@ import { MOCK_VEHICLES } from '../../data/mockVehicles';
 import { noSqlFindAllVehicles, documentToVehicle } from '../../services/noSqlVehicleService';
 import { getActiveSession } from '../../services/noSqlAuthService';
 import type { UserDocument } from '../../services/noSqlAuthService';
+import { useAuth } from '../../context/AuthContext';
 import {
   IconMapPin,
   IconShieldCheck,
@@ -30,7 +31,20 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
   favoriteIds = [],
   onToggleFavorite,
 }) => {
-  const [currentUser, setCurrentUser] = useState<UserDocument | null>(null);
+  const { user: authUser } = useAuth();
+  const [currentUser] = useState<UserDocument | null>(() => getActiveSession());
+  const effectiveUser: UserDocument | null = authUser
+    ? {
+        _id: authUser.id,
+        email: authUser.email,
+        name: authUser.name,
+        accountType: (authUser.accountType || 'pf') as 'pf' | 'pj',
+        createdAt: new Date().toISOString(),
+        isConfirmed: authUser.isConfirmed ?? true,
+        passwordHash: '',
+      }
+    : currentUser;
+
   const [vehicles, setVehicles] = useState<Vehicle[]>(MOCK_VEHICLES);
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [sortBy, setSortBy] = useState<string>('recent');
@@ -39,9 +53,6 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
   const listingsRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const session = getActiveSession();
-    setCurrentUser(session);
-
     const loadVehicles = async () => {
       try {
         const docs = await noSqlFindAllVehicles();
@@ -56,10 +67,10 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
   }, []);
 
   // Determinar vendedor ativo: se passou sellerName, usa ele; senão se usuário logado usa ele; senão padrão 'Carlos Motors'
-  const activeSellerName = sellerName || (currentUser ? currentUser.name : 'Carlos Motors');
+  const activeSellerName = sellerName || (effectiveUser ? effectiveUser.name : 'Carlos Motors');
   const isOwnProfile = !!(
-    currentUser &&
-    currentUser.name.toLowerCase().trim() === activeSellerName.toLowerCase().trim()
+    effectiveUser &&
+    effectiveUser.name.toLowerCase().trim() === activeSellerName.toLowerCase().trim()
   );
 
   // Filtrar veículos associados EXCLUSIVAMENTE a este vendedor
@@ -79,7 +90,7 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
     name: sampleVehicle?.seller?.name || activeSellerName,
     type:
       sampleVehicle?.seller?.type ||
-      (currentUser?.accountType === 'pj' ? 'Revendedora Verificada' : 'Vendedor Particular'),
+      (effectiveUser?.accountType === 'pj' ? 'Revendedora Verificada' : 'Vendedor Particular'),
     initials:
       sampleVehicle?.seller?.initials ||
       activeSellerName
@@ -91,14 +102,14 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
       'VD',
     description:
       sampleVehicle?.seller?.description ||
-      (currentUser
-        ? `Vendedor cadastrado na plataforma MotorLocal em ${currentUser.city || 'Pau dos Ferros - RN'}.`
+      (effectiveUser
+        ? `Vendedor cadastrado na plataforma MotorLocal em ${effectiveUser.city || 'Pau dos Ferros - RN'}.`
         : 'Referência no comércio automotivo de seminovos inspecionados no Alto Oeste Potiguar com garantia e transparência.'),
-    verified: sampleVehicle?.seller?.verified ?? (currentUser?.isConfirmed ?? true),
-    location: sampleVehicle?.location || currentUser?.city || 'Pau dos Ferros - RN',
+    verified: sampleVehicle?.seller?.verified ?? (effectiveUser?.isConfirmed ?? true),
+    location: sampleVehicle?.location || effectiveUser?.city || 'Pau dos Ferros - RN',
     rating: 4.9,
     yearsOnPlatform: sampleVehicle ? '3 anos (Desde 2022)' : 'Membro Recente',
-    whatsapp: currentUser?.phone || '(84) 99876-5432',
+    whatsapp: effectiveUser?.phone || '(84) 99876-5432',
     address: 'Av. Independência, 1040 - Centro',
   };
 

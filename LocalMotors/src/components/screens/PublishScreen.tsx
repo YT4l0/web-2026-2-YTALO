@@ -4,6 +4,7 @@ import { noSqlInsertVehicle } from '../../services/noSqlVehicleService';
 import type { VehicleDocument } from '../../services/noSqlVehicleService';
 import { getActiveSession, toggleUserConfirmation } from '../../services/noSqlAuthService';
 import type { UserDocument } from '../../services/noSqlAuthService';
+import { useAuth } from '../../context/AuthContext';
 import {
   fetchFipeMarcas,
   fetchFipeModelos,
@@ -51,8 +52,76 @@ const DEFAULT_SAMPLE_PHOTOS: PhotoItem[] = [
   },
 ];
 
+interface StepIndicatorProps {
+  currentStep: PublishStep;
+  onStepClick: (step: PublishStep) => void;
+}
+
+const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, onStepClick }) => {
+  return (
+    <div className="w-full bg-[#f2f3ff] p-4 sm:p-6 rounded-2xl mb-8 border border-blue-100 shadow-sm">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { num: 1, title: 'Informações' },
+          { num: 2, title: 'Preço & FIPE' },
+          { num: 3, title: 'Fotos' },
+          { num: 4, title: 'Revisão' },
+        ].map((step) => {
+          const isActive = currentStep === step.num;
+          const isPast = currentStep > step.num;
+
+          return (
+            <div
+              key={step.num}
+              onClick={() => onStepClick(step.num as PublishStep)}
+              className={`flex flex-col gap-1 cursor-pointer transition-opacity ${
+                isActive ? 'opacity-100' : isPast ? 'opacity-90' : 'opacity-50'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                      : isPast
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-white text-slate-600 border border-slate-300'
+                  }`}
+                >
+                  {isPast ? <IconCheck size={14} /> : step.num}
+                </div>
+                <span
+                  className={`text-xs font-medium ${
+                    isActive ? 'text-blue-600' : isPast ? 'text-emerald-600' : 'text-slate-400'
+                  }`}
+                >
+                  {isActive ? 'Atual' : isPast ? 'Concluído' : 'Pendente'}
+                </span>
+              </div>
+              <span className="text-xs font-bold text-slate-900 mt-1">{step.title}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSelectVehicle }) => {
-  const [currentUser, setCurrentUser] = useState<UserDocument | null>(null);
+  const { user: authUser } = useAuth();
+  const [currentUser, setCurrentUser] = useState<UserDocument | null>(() => getActiveSession());
+  const effectiveUser: UserDocument | null = authUser
+    ? {
+        _id: authUser.id,
+        email: authUser.email,
+        name: authUser.name,
+        accountType: (authUser.accountType || 'pf') as 'pf' | 'pj',
+        createdAt: new Date().toISOString(),
+        isConfirmed: authUser.isConfirmed ?? true,
+        passwordHash: '',
+      }
+    : currentUser;
+
   const [currentStep, setCurrentStep] = useState<PublishStep>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -92,11 +161,6 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [stepErrorAlert, setStepErrorAlert] = useState<string | null>(null);
 
-  // Carregar sessão
-  useEffect(() => {
-    const session = getActiveSession();
-    setCurrentUser(session);
-  }, []);
 
   // Carregar marcas FIPE ao montar ou trocar tipo
   useEffect(() => {
@@ -248,8 +312,8 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
 
   // Simulação de confirmação de conta para demonstração
   const handleSimulateConfirmation = () => {
-    if (currentUser) {
-      const updated = toggleUserConfirmation(currentUser._id);
+    if (effectiveUser) {
+      const updated = toggleUserConfirmation(effectiveUser._id);
       if (updated) {
         setCurrentUser({ ...updated });
       }
@@ -429,8 +493,8 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
         'https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?auto=format&fit=crop&w=1200&q=80';
       const allPhotoUrls = photos.map((p) => p.url);
 
-      const sellerDisplayName = currentUser ? currentUser.name : 'Particular';
-      const sellerType = currentUser?.accountType === 'pj' ? 'Revendedora Verificada' : 'Particular';
+      const sellerDisplayName = effectiveUser ? effectiveUser.name : 'Particular';
+      const sellerType = effectiveUser?.accountType === 'pj' ? 'Revendedora Verificada' : 'Particular';
       const sellerInitials = sellerDisplayName
         .split(' ')
         .map((w) => w[0])
@@ -465,7 +529,7 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
           type: sellerType,
           initials: sellerInitials,
           description: `Anunciante cadastrado na plataforma MotorLocal em ${city}.`,
-          verified: currentUser?.isConfirmed ?? true,
+          verified: effectiveUser?.isConfirmed ?? true,
         },
         description: description || 'Veículo em excelente estado de conservação, revisado e com documentação em dia.',
         vehicleType: vehicleType === 'motos' ? 'moto' : vehicleType === 'caminhoes' ? 'utilitario' : 'carro',
@@ -506,7 +570,7 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
   };
 
   // ── 1. CENÁRIO: USUÁRIO NÃO LOGADO ────────────────────────────────────
-  if (!currentUser) {
+  if (!effectiveUser) {
     return (
       <div className="bg-[#faf8ff] min-h-screen text-[#131b2e] flex items-center justify-center p-4 font-sans">
         <div className="bg-white rounded-3xl p-8 sm:p-12 max-w-lg w-full text-center border border-slate-200/90 shadow-xl space-y-6">
@@ -550,7 +614,7 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
   }
 
   // ── 2. CENÁRIO: USUÁRIO LOGADO NÃO CONFIRMADO ─────────────────────────
-  if (!currentUser.isConfirmed) {
+  if (!effectiveUser.isConfirmed) {
     return (
       <div className="bg-[#faf8ff] min-h-screen text-[#131b2e] flex items-center justify-center p-4 font-sans">
         <div className="bg-white rounded-3xl p-8 sm:p-12 max-w-lg w-full text-center border border-amber-200/80 shadow-xl space-y-6">
@@ -566,7 +630,7 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
               Confirmação Necessária
             </h2>
             <p className="text-sm text-slate-600 leading-relaxed">
-              Olá, <strong className="text-slate-800">{currentUser.name}</strong>! Para garantir a segurança dos compradores no Alto Oeste Potiguar, anúncios só podem ser publicados por contas verificadas e confirmadas.
+              Olá, <strong className="text-slate-800">{effectiveUser.name}</strong>! Para garantir a segurança dos compradores no Alto Oeste Potiguar, anúncios só podem ser publicados por contas verificadas e confirmadas.
             </p>
           </div>
 
@@ -698,51 +762,7 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
         </div>
 
         {/* Step Indicator (Stitch Design) */}
-        <div className="w-full bg-[#f2f3ff] p-4 sm:p-6 rounded-2xl mb-8 border border-blue-100 shadow-sm">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { num: 1, title: 'Informações' },
-              { num: 2, title: 'Preço & FIPE' },
-              { num: 3, title: 'Fotos' },
-              { num: 4, title: 'Revisão' },
-            ].map((step) => {
-              const isActive = currentStep === step.num;
-              const isPast = currentStep > step.num;
-
-              return (
-                <div
-                  key={step.num}
-                  onClick={() => handleStepClick(step.num as PublishStep)}
-                  className={`flex flex-col gap-1 cursor-pointer transition-opacity ${
-                    isActive ? 'opacity-100' : isPast ? 'opacity-90' : 'opacity-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                        isActive
-                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                          : isPast
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-white text-slate-600 border border-slate-300'
-                      }`}
-                    >
-                      {isPast ? <IconCheck size={14} /> : step.num}
-                    </div>
-                    <span
-                      className={`text-xs font-medium ${
-                        isActive ? 'text-blue-600' : isPast ? 'text-emerald-600' : 'text-slate-400'
-                      }`}
-                    >
-                      {isActive ? 'Atual' : isPast ? 'Concluído' : 'Pendente'}
-                    </span>
-                  </div>
-                  <span className="text-xs font-bold text-slate-900 mt-1">{step.title}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <StepIndicator currentStep={currentStep} onStepClick={handleStepClick} />
 
         {/* Form Body Container */}
         <div className="bg-white rounded-2xl p-6 sm:p-10 border border-slate-200/90 shadow-xl max-w-3xl mx-auto">
@@ -1352,7 +1372,7 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
                 </div>
                 <div className="flex justify-between items-center pb-2.5 border-b border-slate-200">
                   <span className="text-slate-500">Vendedor Responsável:</span>
-                  <span className="font-bold text-slate-900">{currentUser.name} (Confirmado)</span>
+                  <span className="font-bold text-slate-900">{effectiveUser?.name || 'Vendedor'} (Confirmado)</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500">Fotos cadastradas:</span>

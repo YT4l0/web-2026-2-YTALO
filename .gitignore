@@ -1,1 +1,4 @@
 stitch_reference/
+*.zip
+.env
+.env*.local
