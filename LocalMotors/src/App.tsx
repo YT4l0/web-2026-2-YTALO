@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import type { ScreenType, Vehicle } from './types/vehicle';
 import { MOCK_VEHICLES } from './data/mockVehicles';
 import { useAuth } from './context/AuthContext';
@@ -14,22 +14,21 @@ import { RegisterScreen } from './components/screens/RegisterScreen';
 import { FavoritesScreen } from './components/screens/FavoritesScreen';
 
 export function App() {
-  const { user, isAuthenticated, signOut } = useAuth();
+  const { user, isAuthenticated, isLoading, signOut } = useAuth();
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('home');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle>(MOCK_VEHICLES[0]);
   const [selectedSellerName, setSelectedSellerName] = useState<string>('Carlos Motors');
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
 
-  // Ao concluir redirect do Cognito Hosted UI, navega para 'home'
+  // Navega para 'home' somente apÃ³s a sessÃ£o Cognito ser confirmada pelo AuthContext.
+  // NUNCA baseie a navegaÃ§Ã£o na presenÃ§a de '?code=' na URL â€” isso sÃ³ indica que o
+  // OAuth retornou, nÃ£o que a sessÃ£o foi validada com sucesso pelo Cognito.
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-      const timer = setTimeout(() => {
-        setCurrentScreen('home');
-      }, 0);
-      return () => clearTimeout(timer);
+    if (isAuthenticated && currentScreen === 'login') {
+      setCurrentScreen('home');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentScreen]);
 
   const handleSelectVehicle = (vehicle: Vehicle) => {
     setSelectedVehicle(vehicle);
@@ -44,7 +43,7 @@ export function App() {
   };
 
   const handleNavigate = (screen: ScreenType) => {
-    // Rotas protegidas (publicar anúncio, favoritos persistentes) exigem isAuthenticated
+    // Rotas protegidas (publicar anÃºncio, favoritos persistentes) exigem isAuthenticated
     if ((screen === 'publish' || screen === 'favorites') && !isAuthenticated) {
       setCurrentScreen('login');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -82,6 +81,23 @@ export function App() {
   };
 
   const isAuthScreen = currentScreen === 'login' || currentScreen === 'register';
+
+  // Aguarda a verificaÃ§Ã£o inicial da sessÃ£o (getCurrentUser) antes de renderizar
+  // qualquer tela. Isso evita flash de conteÃºdo nÃ£o autenticado e garante que o
+  // retorno do OAuth seja processado pelo Amplify antes de qualquer decisÃ£o de rota.
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#070c19]">
+        <div className="flex flex-col items-center gap-4 text-white">
+          <svg className="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <span className="text-sm text-slate-400">Verificando sessÃ£o...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#faf8ff]">
@@ -174,3 +190,4 @@ export function App() {
 }
 
 export default App;
+

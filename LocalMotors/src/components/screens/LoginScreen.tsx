@@ -92,15 +92,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
     setIsGoogleLoading(true);
     try {
       await signInWithGoogle();
+      // Em modo 'cognito', o signInWithRedirect() redireciona o navegador para o
+      // Cognito Hosted UI. A execução não continua aqui — a página inteira recarrega
+      // após o retorno do OAuth. A navegação para a área autenticada é gerenciada
+      // pelo App.tsx que observa isAuthenticated via AuthContext.
+      //
+      // Em modo 'mock', a promise resolve normalmente e podemos navegar.
       if (authMode === 'mock') {
         onNavigate('home');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Falha ao autenticar com o Google.';
       setAuthError(msg);
-    } finally {
       setIsGoogleLoading(false);
     }
+    // Não chamamos setIsGoogleLoading(false) em modo cognito aqui porque o redirect
+    // descarrega a página. Em modo mock o finally abaixo cobre.
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
