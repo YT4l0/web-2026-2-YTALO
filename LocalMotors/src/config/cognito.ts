@@ -7,7 +7,7 @@ export interface CognitoConfigStatus {
   missingVars: string[];
   errorMessage: string | null;
 }
-
+console.log('VITE_AUTH_MODE =', import.meta.env.VITE_AUTH_MODE);
 const rawAuthMode = import.meta.env.VITE_AUTH_MODE as string | undefined;
 export const AUTH_MODE: AuthMode = rawAuthMode === 'cognito' ? 'cognito' : 'mock';
 
