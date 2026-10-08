@@ -1,28 +1,70 @@
-import {
+﻿import {
   signInWithRedirect,
   signOut as amplifySignOut,
   getCurrentUser as amplifyGetCurrentUser,
-  fetchUserAttributes,
+  fetchAuthSession,
 } from 'aws-amplify/auth';
 import { Hub } from 'aws-amplify/utils';
 import { cognitoConfigStatus } from '../../config/cognito';
 import type { AuthService, AuthUser } from './types';
+
+// Decodifica o payload do ID Token (JWT) sem verificar assinatura.
+// A verificacao de assinatura ja foi feita pelo Amplify ao receber o token do Cognito.
+function decodeIdTokenPayload(idToken: string): Record<string, string> {
+  try {
+    const base64 = idToken.split('.')[1];
+    const padded = base64.replace(/-/g, '+').replace(/_/g, '/');
+    const json = atob(padded);
+    return JSON.parse(json) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+async function resolveCurrentUser(): Promise<AuthUser | null> {
+  try {
+    const cognitoUser = await amplifyGetCurrentUser();
+    const session = await fetchAuthSession();
+
+    const idToken = session.tokens?.idToken?.toString();
+    if (!idToken) {
+      console.warn('[Cognito] Sem ID Token na sessao.');
+      return null;
+    }
+
+    const claims = decodeIdTokenPayload(idToken);
+
+    // O Google envia name, email e picture como claims no ID Token via Cognito.
+    // Fallback: given_name + family_name caso name nao venha mapeado.
+    const fullName =
+      claims['name'] ||
+      [claims['given_name'], claims['family_name']].filter(Boolean).join(' ') ||
+      claims['email'] ||
+      'Usuario';
+
+    return {
+      id: cognitoUser.userId,
+      email: claims['email'] || '',
+      name: fullName,
+      picture: claims['picture'] || undefined,
+      accountType: 'pf',
+      isConfirmed: true,
+    };
+  } catch (err) {
+    console.warn('[Cognito] resolveCurrentUser: sem sessao ativa.', err);
+    return null;
+  }
+}
 
 export const cognitoAuthService: AuthService = {
   async signInWithGoogle(): Promise<void> {
     if (!cognitoConfigStatus.isConfigured) {
       throw new Error(
         cognitoConfigStatus.errorMessage ||
-          'AWS Cognito não configurado. Verifique as variáveis de ambiente VITE_COGNITO_* no .env.local.'
+          'AWS Cognito nao configurado. Verifique as variaveis VITE_COGNITO_* no .env.local.'
       );
     }
-
-    try {
-      await signInWithRedirect({ provider: 'Google' });
-    } catch (err) {
-      console.error('[Cognito] Erro ao iniciar redirecionamento Google:', err);
-      throw err;
-    }
+    await signInWithRedirect({ provider: 'Google' });
   },
 
   async signOut(): Promise<void> {
@@ -38,50 +80,42 @@ export const cognitoAuthService: AuthService = {
     if (!cognitoConfigStatus.isConfigured) {
       return null;
     }
-
-    try {
-      const user = await amplifyGetCurrentUser();
-      const attributes = await fetchUserAttributes();
-
-      const authUser: AuthUser = {
-        id: user.userId,
-        email: attributes.email || '',
-        name: attributes.name || attributes.email || 'Usuário',
-        picture: attributes.picture,
-        accountType: 'pf',
-        isConfirmed: true,
-      };
-
-      return authUser;
-    } catch {
-      return null;
-    }
+    return resolveCurrentUser();
   },
 
   onAuthChange(callback: (user: AuthUser | null) => void): () => void {
     const stopListening = Hub.listen('auth', async ({ payload }) => {
       const eventName = payload.event as string;
+
       switch (eventName) {
         case 'signInWithRedirect':
         case 'signedInWithRedirect':
         case 'signedIn': {
-          try {
-            const user = await cognitoAuthService.getCurrentUser();
-            callback(user);
-          } catch {
-            callback(null);
+          if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
+            window.history.replaceState({}, document.title, window.location.pathname);
           }
+          const user = await resolveCurrentUser();
+          callback(user);
           break;
         }
+
         case 'signedOut': {
           callback(null);
           break;
         }
+
         case 'signInWithRedirect_failure': {
-          console.error('[Cognito] Falha no redirecionamento OAuth:', payload);
+          console.error('[Cognito] Falha no fluxo OAuth:', payload.message ?? payload.event);
           callback(null);
           break;
         }
+
+        case 'tokenRefresh_failure': {
+          console.warn('[Cognito] Falha ao renovar token.');
+          callback(null);
+          break;
+        }
+
         default:
           break;
       }

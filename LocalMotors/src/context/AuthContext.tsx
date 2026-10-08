@@ -29,11 +29,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const initialUser = await authService.getCurrentUser();
         if (isMounted) {
           setUser(initialUser);
-
-          // Trata retorno do redirecionamento Cognito Hosted UI (?code=...&state=...)
-          if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
-            window.history.replaceState({}, document.title, window.location.pathname);
-          }
         }
       } catch (err) {
         console.error('[AuthContext] Falha ao verificar autenticação inicial:', err);
@@ -50,11 +45,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isMounted) {
         setUser(changedUser);
         setIsLoading(false);
-
-        // Limpa query params ao concluir o redirecionamento
-        if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
       }
     });
 

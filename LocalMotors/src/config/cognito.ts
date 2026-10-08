@@ -32,6 +32,17 @@ if (AUTH_MODE === 'cognito') {
   if (!userPoolClientId) missing.push('VITE_COGNITO_CLIENT_ID');
   if (!cleanDomain) missing.push('VITE_COGNITO_DOMAIN');
 
+  // Detecta o erro comum de colocar o URL do OpenID Discovery em vez do domínio Hosted UI.
+  // Correto:   meu-prefixo.auth.us-east-1.amazoncognito.com
+  // Incorreto: cognito-idp.us-east-1.amazonaws.com/us-east-1_XXXXX/.well-known/openid-configuration
+  if (cleanDomain && (cleanDomain.includes('/.well-known/') || cleanDomain.includes('cognito-idp.'))) {
+    const domainError =
+      'VITE_COGNITO_DOMAIN contém uma URL de discovery (.well-known) em vez do domínio do Hosted UI. ' +
+      'O valor correto é o prefixo configurado no Cognito, ex: meu-app.auth.us-east-1.amazoncognito.com';
+    missing.push('VITE_COGNITO_DOMAIN (valor inválido)');
+    console.error('[AWS Cognito] ' + domainError);
+  }
+
   if (missing.length > 0) {
     cognitoConfigStatus.missingVars = missing;
     cognitoConfigStatus.errorMessage = `Cognito não configurado. Variáveis ausentes no .env: ${missing.join(', ')}`;
