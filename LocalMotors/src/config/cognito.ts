@@ -7,9 +7,9 @@ export interface CognitoConfigStatus {
   missingVars: string[];
   errorMessage: string | null;
 }
-console.log('VITE_AUTH_MODE =', import.meta.env.VITE_AUTH_MODE);
 const rawAuthMode = import.meta.env.VITE_AUTH_MODE as string | undefined;
-export const AUTH_MODE: AuthMode = rawAuthMode === 'cognito' ? 'cognito' : 'mock';
+// Cognito é o padrão. O mock só é usado se VITE_AUTH_MODE=mock for definido de forma explícita.
+export const AUTH_MODE: AuthMode = rawAuthMode === 'mock' ? 'mock' : 'cognito';
 
 const userPoolId = import.meta.env.VITE_COGNITO_USER_POOL_ID as string | undefined;
 const userPoolClientId = import.meta.env.VITE_COGNITO_CLIENT_ID as string | undefined;

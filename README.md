@@ -44,10 +44,11 @@ O projeto suporta autenticação local simulada (`mock`) e integração com **AW
 Crie um arquivo `.env.local` na pasta `LocalMotors/` (baseado no `.env.example`):
 
 ```env
-# Modo de autenticação: 'mock' (offline para dev) ou 'cognito' (AWS Cognito)
-VITE_AUTH_MODE=mock
+# Modo de autenticação: valor vazio ou ausente = 'cognito' (padrão).
+# Use 'mock' apenas para desenvolvimento offline sem credenciais AWS.
+# VITE_AUTH_MODE=mock
 
-# Configurações do AWS Cognito User Pool (obrigatórias quando VITE_AUTH_MODE=cognito)
+# Configurações do AWS Cognito User Pool (obrigatórias quando VITE_AUTH_MODE != 'mock')
 VITE_COGNITO_USER_POOL_ID=
 VITE_COGNITO_CLIENT_ID=
 VITE_COGNITO_DOMAIN=
