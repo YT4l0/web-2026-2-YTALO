@@ -318,12 +318,6 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) =>
             </p>
           </div>
 
-          {/* Mode Banner & Warnings */}
-          {authMode === 'cognito' && (
-            <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/40 text-xs text-blue-200">
-              <span className="font-bold">Modo AWS Cognito:</span> O cadastro tradicional local está desabilitado. Utilize o botão <strong>Continuar com Google</strong> abaixo.
-            </div>
-          )}
 
           {configError && (
             <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-500/50 text-xs text-amber-300 flex items-start gap-2">
