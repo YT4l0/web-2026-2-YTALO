@@ -156,9 +156,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
             {CAROUSEL_SLIDES.map((slide, index) => (
               <div
                 key={slide.id}
-                className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-                  index === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                }`}
+                className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentSlide ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
               >
                 <img
                   src={slide.image}
@@ -231,11 +230,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                   type="button"
                   key={slide.id}
                   onClick={() => setCurrentSlide(index)}
-                  className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
-                    index === currentSlide
-                      ? 'w-10 bg-blue-500'
-                      : 'w-4 bg-slate-600/80 hover:bg-slate-400'
-                  }`}
+                  className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${index === currentSlide
+                    ? 'w-10 bg-blue-500'
+                    : 'w-4 bg-slate-600/80 hover:bg-slate-400'
+                    }`}
                   title={`Ir para slide ${index + 1}`}
                 />
               ))}
@@ -275,6 +273,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
               >
                 Preencher dados
               </button>
+            </div>
+          )}
+
+          {/* Cognito Mode Indicator / Info */}
+          {authMode === 'cognito' && (
+            <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/40 text-xs text-blue-200">
+              <span className="font-bold">Modo AWS Cognito:</span> O login por e-mail/senha local está desabilitado. Utilize o botão <strong>Continuar com Google</strong> abaixo.
             </div>
           )}
 

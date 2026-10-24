@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import type { ScreenType, Vehicle } from './types/vehicle';
 import { MOCK_VEHICLES } from './data/mockVehicles';
 import { useAuth } from './context/AuthContext';
@@ -12,6 +12,8 @@ import { SellerProfileScreen } from './components/screens/SellerProfileScreen';
 import { LoginScreen } from './components/screens/LoginScreen';
 import { RegisterScreen } from './components/screens/RegisterScreen';
 import { FavoritesScreen } from './components/screens/FavoritesScreen';
+import { ChatWidget } from './components/chat/ChatWidget';
+import { AUTH_MODE } from './config/cognito';
 
 export function App() {
   const { user, isAuthenticated, isLoading, signOut } = useAuth();
@@ -184,6 +186,10 @@ export function App() {
       {/* Main Footer (Rendered on Home, Search, Detail, Favorites, Publish, Seller) */}
       {!isAuthScreen && (
         <Footer onNavigate={handleNavigate} />
+      )}
+
+      {isAuthenticated && !isLoading && AUTH_MODE === 'cognito' && (
+        <ChatWidget />
       )}
     </div>
   );
