@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { ScreenType, Vehicle } from '../../types/vehicle';
 import {
   noSqlFindVehicles,
@@ -51,61 +51,69 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({
   const [isAlertCreated, setIsAlertCreated] = useState(false);
 
   // ── Buscar veículos quando filtros mudam ──────────────────────────────
-  const fetchVehicles = useCallback(async () => {
-    setIsLoading(true);
-
-    // Mapeamento do tipo selecionado para o tipo do documento
-    const typeMapping: Record<string, string> = {
-      Carros: 'carro',
-      Motos: 'moto',
-      Utilitários: 'utilitario',
-    };
-
-    const vehicleTypeFilter = selectedTypes.includes('Todos')
-      ? []
-      : selectedTypes.map((t) => typeMapping[t]).filter(Boolean);
-
-    // Mapeamento da ordenação
-    const sortMapping: Record<string, VehicleQueryFilter['sort']> = {
-      relevant: 'relevant',
-      'Menor preço': 'price_asc',
-      'Maior preço': 'price_desc',
-      'Mais recentes': 'newest',
-    };
-
-    const query: VehicleQueryFilter = {
-      vehicleType: vehicleTypeFilter.length > 0 ? vehicleTypeFilter : undefined,
-      city: selectedCities.length > 0 ? selectedCities : undefined,
-      brand: selectedBrands.length > 0 ? selectedBrands : undefined,
-      minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
-      maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
-      minYear: minYear ? parseInt(minYear, 10) : undefined,
-      maxYear: maxYear ? parseInt(maxYear, 10) : undefined,
-      maxMileage: maxMileage ? parseInt(maxMileage, 10) : undefined,
-      sort: sortMapping[selectedSort] || 'relevant',
-    };
-
-    try {
-      const docs = await noSqlFindVehicles(query);
-      const allVehicles = docs.map(documentToVehicle);
-      setTotalResults(allVehicles.length);
-
-      // Paginação
-      const start = (currentPage - 1) * ITEMS_PER_PAGE;
-      const paged = allVehicles.slice(start, start + ITEMS_PER_PAGE);
-      setVehicles(paged);
-    } catch (err) {
-      console.error('Erro ao buscar veículos:', err);
-      setVehicles([]);
-      setTotalResults(0);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedSort, selectedCities, selectedBrands, selectedTypes, minPrice, maxPrice, minYear, maxYear, maxMileage, currentPage]);
-
   useEffect(() => {
-    fetchVehicles();
-  }, [fetchVehicles]);
+    let isCancelled = false;
+
+    const loadVehicles = async () => {
+      // Mapeamento do tipo selecionado para o tipo do documento
+      const typeMapping: Record<string, string> = {
+        Carros: 'carro',
+        Motos: 'moto',
+        Utilitários: 'utilitario',
+      };
+
+      const vehicleTypeFilter = selectedTypes.includes('Todos')
+        ? []
+        : selectedTypes.map((t) => typeMapping[t]).filter(Boolean);
+
+      // Mapeamento da ordenação
+      const sortMapping: Record<string, VehicleQueryFilter['sort']> = {
+        relevant: 'relevant',
+        'Menor preço': 'price_asc',
+        'Maior preço': 'price_desc',
+        'Mais recentes': 'newest',
+      };
+
+      const query: VehicleQueryFilter = {
+        vehicleType: vehicleTypeFilter.length > 0 ? vehicleTypeFilter : undefined,
+        city: selectedCities.length > 0 ? selectedCities : undefined,
+        brand: selectedBrands.length > 0 ? selectedBrands : undefined,
+        minPrice: minPrice ? parseInt(minPrice, 10) : undefined,
+        maxPrice: maxPrice ? parseInt(maxPrice, 10) : undefined,
+        minYear: minYear ? parseInt(minYear, 10) : undefined,
+        maxYear: maxYear ? parseInt(maxYear, 10) : undefined,
+        maxMileage: maxMileage ? parseInt(maxMileage, 10) : undefined,
+        sort: sortMapping[selectedSort] || 'relevant',
+      };
+
+      try {
+        const docs = await noSqlFindVehicles(query);
+        if (isCancelled) return;
+        const allVehicles = docs.map(documentToVehicle);
+        setTotalResults(allVehicles.length);
+
+        // Paginação
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        const paged = allVehicles.slice(start, start + ITEMS_PER_PAGE);
+        setVehicles(paged);
+      } catch (err) {
+        if (isCancelled) return;
+        console.error('Erro ao buscar veículos:', err);
+        setVehicles([]);
+        setTotalResults(0);
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadVehicles();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedSort, selectedCities, selectedBrands, selectedTypes, minPrice, maxPrice, minYear, maxYear, maxMileage, currentPage]);
 
   // ── Contagem dinâmica por filtro ─────────────────────────────────────
   const [cityCounts, setCityCounts] = useState<Record<string, number>>({});
