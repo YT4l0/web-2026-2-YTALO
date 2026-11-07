@@ -505,6 +505,8 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
       const fullTitle = title.trim() || `${brand.trim()} ${model.trim()} ${version.trim()}`.trim();
 
       const newVehicleDoc: Omit<VehicleDocument, '_id' | 'createdAt' | 'updatedAt'> = {
+        ownerId: effectiveUser ? effectiveUser._id : null,
+        status: 'ativo',
         title: fullTitle,
         brand,
         model,
