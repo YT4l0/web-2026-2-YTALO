@@ -57,7 +57,8 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
       try {
         const docs = await noSqlFindAllVehicles();
         if (docs && docs.length > 0) {
-          setVehicles(docs.map(documentToVehicle));
+          const activeDocs = docs.filter((doc) => doc.status === 'ativo');
+          setVehicles(activeDocs.map(documentToVehicle));
         }
       } catch (err) {
         console.error('Erro ao carregar veículos do vendedor:', err);

@@ -1,4 +1,4 @@
-export type ScreenType = 'home' | 'search' | 'detail' | 'login' | 'register' | 'favorites' | 'publish' | 'seller';
+export type ScreenType = 'home' | 'search' | 'detail' | 'login' | 'register' | 'favorites' | 'publish' | 'seller' | 'myListings' | 'editListing';
 
 export interface Vehicle {
   id: string;

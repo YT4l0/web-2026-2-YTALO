@@ -37,6 +37,14 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const handleMyListingsClick = () => {
+    if (currentUser) {
+      onNavigate('myListings');
+    } else {
+      onNavigate('login');
+    }
+  };
+
   const handleSellerProfileClick = () => {
     if (currentUser && onViewSeller) {
       onViewSeller(currentUser.name);
@@ -101,6 +109,18 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               )}
             </button>
+            {currentUser && (
+              <button
+                onClick={handleMyListingsClick}
+                className={`transition-colors py-2 border-b-2 flex items-center gap-1.5 ${
+                  currentScreen === 'myListings' || currentScreen === 'editListing'
+                    ? 'text-blue-400 border-blue-500 font-semibold'
+                    : 'text-slate-300 border-transparent hover:text-white'
+                }`}
+              >
+                Meus anúncios
+              </button>
+            )}
             <button
               onClick={handleSellerProfileClick}
               className={`transition-colors py-2 border-b-2 ${
