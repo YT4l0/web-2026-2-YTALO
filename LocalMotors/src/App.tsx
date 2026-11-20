@@ -31,8 +31,11 @@ export function App() {
   // OAuth retornou, nÃ£o que a sessÃ£o foi validada com sucesso pelo Cognito.
   useEffect(() => {
     if (isAuthenticated && currentScreen === 'login') {
-      setCurrentScreen('home');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const timer = setTimeout(() => {
+        setCurrentScreen('home');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isAuthenticated, currentScreen]);
 
