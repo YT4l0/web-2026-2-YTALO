@@ -13,6 +13,29 @@ interface HeaderProps {
   onViewSeller?: (sellerName: string) => void;
 }
 
+interface CustomProfileData {
+  name?: string;
+  phone?: string;
+  city?: string;
+  photoUrl?: string;
+}
+
+const getSavedProfile = (userId?: string | null, email?: string | null): CustomProfileData | null => {
+  try {
+    if (userId) {
+      const raw = localStorage.getItem(`motorlocal_profile_${userId}`);
+      if (raw) return JSON.parse(raw);
+    }
+    if (email) {
+      const rawEmail = localStorage.getItem(`motorlocal_profile_${email}`);
+      if (rawEmail) return JSON.parse(rawEmail);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 export const Header: React.FC<HeaderProps> = ({
   currentScreen,
   favoriteCount = 0,
@@ -21,6 +44,31 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   onViewSeller,
 }) => {
+  const currentUserId = currentUser ? ('id' in currentUser ? currentUser.id : currentUser._id) : null;
+  const currentUserEmail = currentUser?.email || null;
+
+  const [customProfile, setCustomProfile] = React.useState<CustomProfileData | null>(() =>
+    getSavedProfile(currentUserId, currentUserEmail)
+  );
+
+  React.useEffect(() => {
+    const syncProfile = () => {
+      setCustomProfile(getSavedProfile(currentUserId, currentUserEmail));
+    };
+
+    syncProfile();
+
+    window.addEventListener('profileUpdated', syncProfile);
+    window.addEventListener('storage', syncProfile);
+
+    return () => {
+      window.removeEventListener('profileUpdated', syncProfile);
+      window.removeEventListener('storage', syncProfile);
+    };
+  }, [currentUserId, currentUserEmail]);
+
+  const displayName = customProfile?.name || (currentUser ? currentUser.name : '');
+  const displayPicture = customProfile?.photoUrl || (currentUser && 'picture' in currentUser ? currentUser.picture : undefined);
   const handleSellVehicleClick = () => {
     if (currentUser) {
       onNavigate('publish');
@@ -37,9 +85,17 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const handleMyListingsClick = () => {
+    if (currentUser) {
+      onNavigate('myListings');
+    } else {
+      onNavigate('login');
+    }
+  };
+
   const handleSellerProfileClick = () => {
     if (currentUser && onViewSeller) {
-      onViewSeller(currentUser.name);
+      onViewSeller(displayName || currentUser.name);
     } else {
       onNavigate('seller');
     }
@@ -101,6 +157,18 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               )}
             </button>
+            {currentUser && (
+              <button
+                onClick={handleMyListingsClick}
+                className={`transition-colors py-2 border-b-2 flex items-center gap-1.5 ${
+                  currentScreen === 'myListings' || currentScreen === 'editListing'
+                    ? 'text-blue-400 border-blue-500 font-semibold'
+                    : 'text-slate-300 border-transparent hover:text-white'
+                }`}
+              >
+                Meus anúncios
+              </button>
+            )}
             <button
               onClick={handleSellerProfileClick}
               className={`transition-colors py-2 border-b-2 ${
@@ -123,12 +191,14 @@ export const Header: React.FC<HeaderProps> = ({
                   title="Ver meu perfil e anúncios"
                 >
                   <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center overflow-hidden shrink-0">
-                    {'picture' in currentUser && currentUser.picture ? (
+                    {displayPicture ? (
                       <img
-                        src={currentUser.picture}
-                        alt={currentUser.name}
+                        src={displayPicture}
+                        alt={displayName || 'Foto de perfil'}
                         className="w-full h-full object-cover"
                       />
+                    ) : displayName ? (
+                      displayName[0].toUpperCase()
                     ) : currentUser.name ? (
                       currentUser.name[0].toUpperCase()
                     ) : (
@@ -137,7 +207,7 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                   <div className="hidden sm:flex flex-col">
                     <span className="text-xs font-semibold text-white leading-none">
-                      {currentUser.name}
+                      {displayName || currentUser.name}
                     </span>
                     <span className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
                       {currentUser.isConfirmed ? (

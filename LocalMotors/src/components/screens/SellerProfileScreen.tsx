@@ -24,6 +24,29 @@ interface SellerProfileScreenProps {
   onToggleFavorite?: (vehicleId: string) => void;
 }
 
+interface CustomProfileData {
+  name: string;
+  phone: string;
+  city: string;
+  photoUrl?: string;
+}
+
+const getSavedProfile = (userId?: string | null, email?: string | null): CustomProfileData | null => {
+  try {
+    if (userId) {
+      const raw = localStorage.getItem(`motorlocal_profile_${userId}`);
+      if (raw) return JSON.parse(raw);
+    }
+    if (email) {
+      const rawEmail = localStorage.getItem(`motorlocal_profile_${email}`);
+      if (rawEmail) return JSON.parse(rawEmail);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
   sellerName,
   onNavigate,
@@ -38,12 +61,129 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
         _id: authUser.id,
         email: authUser.email,
         name: authUser.name,
+        picture: authUser.picture,
+        phone: currentUser?.phone,
+        city: currentUser?.city,
         accountType: (authUser.accountType || 'pf') as 'pf' | 'pj',
         createdAt: new Date().toISOString(),
         isConfirmed: authUser.isConfirmed ?? true,
         passwordHash: '',
       }
     : currentUser;
+
+  const [customProfile, setCustomProfile] = useState<CustomProfileData | null>(() => {
+    return effectiveUser ? getSavedProfile(effectiveUser._id, effectiveUser.email) : null;
+  });
+
+  // Modal de edição de perfil
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleOpenEditModal = () => {
+    setEditName(customProfile?.name || effectiveUser?.name || '');
+    setEditPhone(customProfile?.phone || effectiveUser?.phone || '(84) 99876-5432');
+    setEditCity(customProfile?.city || effectiveUser?.city || 'Pau dos Ferros - RN');
+    setPhotoPreview(customProfile?.photoUrl || effectiveUser?.picture || null);
+    setEditPhotoFile(null);
+    setSaveStatus(null);
+    setIsEditModalOpen(true);
+  };
+
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEditPhotoFile(file);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotoPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!effectiveUser) return;
+
+    setIsSavingProfile(true);
+    setSaveStatus(null);
+
+    try {
+      let photoBase64: string | undefined = undefined;
+      if (editPhotoFile) {
+        photoBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(editPhotoFile);
+        });
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://api.ytalodias.zangado.web.ufersa.dev.br';
+      let uploadedPhotoUrl = customProfile?.photoUrl;
+
+      // Chama a rota PUT /profile no API Gateway
+      try {
+        const response = await fetch(`${apiUrl}/profile`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: effectiveUser._id,
+            name: editName.trim(),
+            phone: editPhone.trim(),
+            city: editCity.trim(),
+            photoBase64,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.profile?.photoUrl) {
+            uploadedPhotoUrl = data.profile.photoUrl;
+          }
+        }
+      } catch (networkErr) {
+        console.warn('API Gateway indisponível ou offline, salvando localmente:', networkErr);
+      }
+
+      // Se a API ainda não estiver no ar ou em mock, usa o preview da foto
+      if (!uploadedPhotoUrl && photoPreview) {
+        uploadedPhotoUrl = photoPreview;
+      }
+
+      const newProfile: CustomProfileData = {
+        name: editName.trim() || effectiveUser.name,
+        phone: editPhone.trim(),
+        city: editCity.trim(),
+        photoUrl: uploadedPhotoUrl,
+      };
+
+      setCustomProfile(newProfile);
+      localStorage.setItem(`motorlocal_profile_${effectiveUser._id}`, JSON.stringify(newProfile));
+      if (effectiveUser.email) {
+        localStorage.setItem(`motorlocal_profile_${effectiveUser.email}`, JSON.stringify(newProfile));
+      }
+      window.dispatchEvent(new CustomEvent('profileUpdated'));
+      setSaveStatus({ type: 'success', message: 'Perfil e foto atualizados com sucesso!' });
+
+      setTimeout(() => {
+        setIsEditModalOpen(false);
+        setSaveStatus(null);
+      }, 1000);
+    } catch (err) {
+      console.error('Erro ao atualizar perfil:', err);
+      setSaveStatus({ type: 'error', message: 'Erro ao salvar alterações do perfil.' });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   const [vehicles, setVehicles] = useState<Vehicle[]>(MOCK_VEHICLES);
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
@@ -57,7 +197,8 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
       try {
         const docs = await noSqlFindAllVehicles();
         if (docs && docs.length > 0) {
-          setVehicles(docs.map(documentToVehicle));
+          const activeDocs = docs.filter((doc) => doc.status === 'ativo');
+          setVehicles(activeDocs.map(documentToVehicle));
         }
       } catch (err) {
         console.error('Erro ao carregar veículos do vendedor:', err);
@@ -67,10 +208,11 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
   }, []);
 
   // Determinar vendedor ativo: se passou sellerName, usa ele; senão se usuário logado usa ele; senão padrão 'Carlos Motors'
-  const activeSellerName = sellerName || (effectiveUser ? effectiveUser.name : 'Carlos Motors');
+  const activeSellerName = sellerName || (effectiveUser ? (customProfile?.name || effectiveUser.name) : 'Carlos Motors');
   const isOwnProfile = !!(
     effectiveUser &&
-    effectiveUser.name.toLowerCase().trim() === activeSellerName.toLowerCase().trim()
+    (effectiveUser.name.toLowerCase().trim() === activeSellerName.toLowerCase().trim() ||
+      (customProfile?.name && customProfile.name.toLowerCase().trim() === activeSellerName.toLowerCase().trim()))
   );
 
   // Filtrar veículos associados EXCLUSIVAMENTE a este vendedor
@@ -84,32 +226,37 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
   // Exibe estritamente os veículos deste vendedor
   const displayVehicles = sellerVehicles;
 
-  // Amostra de metadados do vendedor a partir do primeiro veículo ou dados do currentUser ou defaults
+  // Metadados do vendedor
   const sampleVehicle = sellerVehicles[0];
+  const displayName = (isOwnProfile && customProfile?.name) ? customProfile.name : (sampleVehicle?.seller?.name || activeSellerName);
+  const displayLocation = (isOwnProfile && customProfile?.city) ? customProfile.city : (sampleVehicle?.location || effectiveUser?.city || 'Pau dos Ferros - RN');
+  const displayPhone = (isOwnProfile && customProfile?.phone) ? customProfile.phone : (sampleVehicle ? '(84) 99876-5432' : (effectiveUser?.phone || '(84) 99876-5432'));
+  const displayAvatar = isOwnProfile ? (customProfile?.photoUrl || effectiveUser?.picture) : sampleVehicle?.seller?.avatar;
+  const initials = displayName
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'VD';
+
   const sellerInfo = {
-    name: sampleVehicle?.seller?.name || activeSellerName,
+    name: displayName,
+    avatar: displayAvatar,
     type:
       sampleVehicle?.seller?.type ||
       (effectiveUser?.accountType === 'pj' ? 'Revendedora Verificada' : 'Vendedor Particular'),
-    initials:
-      sampleVehicle?.seller?.initials ||
-      activeSellerName
-        .split(' ')
-        .map((w) => w[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase() ||
-      'VD',
+    initials,
     description:
       sampleVehicle?.seller?.description ||
       (effectiveUser
-        ? `Vendedor cadastrado na plataforma MotorLocal em ${effectiveUser.city || 'Pau dos Ferros - RN'}.`
+        ? `Vendedor cadastrado na plataforma MotorLocal em ${displayLocation}.`
         : 'Referência no comércio automotivo de seminovos inspecionados no Alto Oeste Potiguar com garantia e transparência.'),
     verified: sampleVehicle?.seller?.verified ?? (effectiveUser?.isConfirmed ?? true),
-    location: sampleVehicle?.location || effectiveUser?.city || 'Pau dos Ferros - RN',
+    location: displayLocation,
     rating: 4.9,
     yearsOnPlatform: sampleVehicle ? '3 anos (Desde 2022)' : 'Membro Recente',
-    whatsapp: effectiveUser?.phone || '(84) 99876-5432',
+    whatsapp: displayPhone,
     address: 'Av. Independência, 1040 - Centro',
   };
 
@@ -175,10 +322,18 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
                 {/* Seller Profile Header Card with dotted avatar border */}
                 <div className="bg-[#f2f3ff] rounded-2xl p-5 text-center relative overflow-hidden border border-blue-100">
                   <div className="relative inline-block mx-auto mb-3">
-                    <div className="w-20 h-20 rounded-full p-1 border-2 border-dashed border-blue-600 flex items-center justify-center bg-white shadow-sm">
-                      <div className="w-full h-full rounded-full bg-gradient-to-tr from-blue-700 to-blue-500 text-white font-extrabold text-2xl flex items-center justify-center shadow-inner">
-                        {sellerInfo.initials}
-                      </div>
+                    <div className="w-20 h-20 rounded-full p-1 border-2 border-dashed border-blue-600 flex items-center justify-center bg-white shadow-sm overflow-hidden">
+                      {sellerInfo.avatar ? (
+                        <img
+                          src={sellerInfo.avatar}
+                          alt={sellerInfo.name}
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full rounded-full bg-gradient-to-tr from-blue-700 to-blue-500 text-white font-extrabold text-2xl flex items-center justify-center shadow-inner">
+                          {sellerInfo.initials}
+                        </div>
+                      )}
                     </div>
                     <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-white text-slate-800 px-2 py-0.5 rounded-full text-xs font-bold shadow-sm flex items-center gap-1 border border-slate-200">
                       <span className="text-blue-600">{sellerInfo.rating}</span>
@@ -196,6 +351,22 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
                     <IconMapPin size={12} className="text-blue-600" />
                     {sellerInfo.location}
                   </div>
+
+                  {isOwnProfile && (
+                    <div className="mt-3 pt-3 border-t border-blue-200/50">
+                      <button
+                        type="button"
+                        onClick={handleOpenEditModal}
+                        className="w-full py-1.5 px-3 rounded-xl text-xs font-bold bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 shadow-xs transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                        </svg>
+                        <span>Editar Perfil / Foto</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Navigation Links with Active Indicator */}
@@ -309,8 +480,16 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
                   {/* Seller Avatar Column */}
                   <div className="md:col-span-4 flex flex-col items-start sm:items-center md:items-start text-left">
-                    <div className="relative w-28 h-28 rounded-2xl bg-gradient-to-tr from-blue-700 to-blue-500 text-white font-extrabold text-3xl flex items-center justify-center shadow-lg shadow-blue-600/20 mb-3">
-                      {sellerInfo.initials}
+                    <div className="relative w-28 h-28 rounded-2xl bg-gradient-to-tr from-blue-700 to-blue-500 text-white font-extrabold text-3xl flex items-center justify-center shadow-lg shadow-blue-600/20 mb-3 overflow-hidden">
+                      {sellerInfo.avatar ? (
+                        <img
+                          src={sellerInfo.avatar}
+                          alt={sellerInfo.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        sellerInfo.initials
+                      )}
                     </div>
                     <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
                       {sellerInfo.name}
@@ -320,6 +499,19 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
                     </p>
 
                     <div className="mt-4 flex flex-wrap gap-2">
+                      {isOwnProfile && (
+                        <button
+                          type="button"
+                          onClick={handleOpenEditModal}
+                          className="px-4 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-blue-600 border border-blue-200 shadow-sm transition-all flex items-center gap-1.5"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                          </svg>
+                          <span>Editar Perfil</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => onNavigate('publish')}
                         className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5"
@@ -726,6 +918,161 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
           </div>
         </div>
       </div>
+      {/* MODAL DE EDIÇÃO DE PERFIL */}
+      {isEditModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-edit-profile-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+        >
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 id="modal-edit-profile-title" className="text-lg font-bold text-slate-900">
+                Editar Perfil do Usuário
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                aria-label="Fechar modal"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              {/* Upload de foto */}
+              <div className="flex flex-col items-center sm:flex-row gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <div className="w-20 h-20 rounded-full border-2 border-blue-500 overflow-hidden bg-white shrink-0 flex items-center justify-center shadow-sm">
+                  {photoPreview ? (
+                    <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xl font-bold text-blue-600">{sellerInfo.initials}</span>
+                  )}
+                </div>
+                <div className="flex-1 text-center sm:text-left">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Foto de Perfil
+                  </label>
+                  <p className="text-[11px] text-slate-500 mb-2">
+                    Envie uma foto diferente da autenticação do Google.
+                  </p>
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold cursor-pointer transition-colors">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    <span>Escolher nova foto</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoSelect}
+                      className="hidden"
+                    />
+                  </label>
+                  {editPhotoFile && (
+                    <span className="block text-[11px] text-emerald-600 font-medium mt-1 truncate max-w-xs">
+                      ✓ {editPhotoFile.name}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Nome */}
+              <div>
+                <label htmlFor="edit-name" className="block text-xs font-bold text-slate-700 mb-1">
+                  Nome Completo *
+                </label>
+                <input
+                  id="edit-name"
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm text-slate-900 bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  placeholder="Seu nome"
+                />
+              </div>
+
+              {/* Telefone */}
+              <div>
+                <label htmlFor="edit-phone" className="block text-xs font-bold text-slate-700 mb-1">
+                  Telefone / WhatsApp *
+                </label>
+                <input
+                  id="edit-phone"
+                  type="text"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm text-slate-900 bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  placeholder="(84) 99876-5432"
+                />
+              </div>
+
+              {/* Cidade */}
+              <div>
+                <label htmlFor="edit-city" className="block text-xs font-bold text-slate-700 mb-1">
+                  Cidade / Localização *
+                </label>
+                <input
+                  id="edit-city"
+                  type="text"
+                  value={editCity}
+                  onChange={(e) => setEditCity(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-sm text-slate-900 bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  placeholder="Pau dos Ferros - RN"
+                />
+              </div>
+
+              {saveStatus && (
+                <div
+                  role="alert"
+                  className={`p-3 rounded-xl text-xs font-semibold ${
+                    saveStatus.type === 'success'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}
+                >
+                  {saveStatus.message}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  disabled={isSavingProfile}
+                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingProfile}
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-600/30 transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isSavingProfile ? (
+                    <>
+                      <svg className="animate-spin h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Salvando no S3 / DynamoDB...</span>
+                    </>
+                  ) : (
+                    'Salvar Alterações'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

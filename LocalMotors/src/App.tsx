@@ -12,6 +12,8 @@ import { SellerProfileScreen } from './components/screens/SellerProfileScreen';
 import { LoginScreen } from './components/screens/LoginScreen';
 import { RegisterScreen } from './components/screens/RegisterScreen';
 import { FavoritesScreen } from './components/screens/FavoritesScreen';
+import { MyListingsScreen } from './components/screens/MyListingsScreen';
+import { EditListingScreen } from './components/screens/EditListingScreen';
 import { ChatWidget } from './components/chat/ChatWidget';
 import { AUTH_MODE } from './config/cognito';
 
@@ -21,20 +23,31 @@ export function App() {
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle>(MOCK_VEHICLES[0]);
   const [selectedSellerName, setSelectedSellerName] = useState<string>('Carlos Motors');
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
+  const [listingSuccessMessage, setListingSuccessMessage] = useState<string | null>(null);
 
   // Navega para 'home' somente apÃ³s a sessÃ£o Cognito ser confirmada pelo AuthContext.
   // NUNCA baseie a navegaÃ§Ã£o na presenÃ§a de '?code=' na URL â€” isso sÃ³ indica que o
   // OAuth retornou, nÃ£o que a sessÃ£o foi validada com sucesso pelo Cognito.
   useEffect(() => {
     if (isAuthenticated && currentScreen === 'login') {
-      setCurrentScreen('home');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const timer = setTimeout(() => {
+        setCurrentScreen('home');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isAuthenticated, currentScreen]);
 
   const handleSelectVehicle = (vehicle: Vehicle) => {
     setSelectedVehicle(vehicle);
     setCurrentScreen('detail');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleEditVehicle = (vehicleId: string) => {
+    setEditingVehicleId(vehicleId);
+    setCurrentScreen('editListing');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -45,8 +58,14 @@ export function App() {
   };
 
   const handleNavigate = (screen: ScreenType) => {
-    // Rotas protegidas (publicar anÃºncio, favoritos persistentes) exigem isAuthenticated
-    if ((screen === 'publish' || screen === 'favorites') && !isAuthenticated) {
+    // Rotas protegidas (publicar anúncio, favoritos persistentes, meus anúncios, editar anúncio) exigem isAuthenticated
+    if (
+      (screen === 'publish' ||
+        screen === 'favorites' ||
+        screen === 'myListings' ||
+        screen === 'editListing') &&
+      !isAuthenticated
+    ) {
       setCurrentScreen('login');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -63,7 +82,12 @@ export function App() {
 
   const handleLogout = async () => {
     await signOut();
-    if (currentScreen === 'publish' || currentScreen === 'favorites') {
+    if (
+      currentScreen === 'publish' ||
+      currentScreen === 'favorites' ||
+      currentScreen === 'myListings' ||
+      currentScreen === 'editListing'
+    ) {
       setCurrentScreen('home');
     }
   };
@@ -168,6 +192,28 @@ export function App() {
             onToggleFavorite={handleToggleFavorite}
             onNavigate={handleNavigate}
             onSelectVehicle={handleSelectVehicle}
+          />
+        )}
+
+        {currentScreen === 'myListings' && (
+          <MyListingsScreen
+            onNavigate={handleNavigate}
+            onEdit={handleEditVehicle}
+            onViewVehicle={handleSelectVehicle}
+            successMessage={listingSuccessMessage}
+            onClearSuccessMessage={() => setListingSuccessMessage(null)}
+          />
+        )}
+
+        {currentScreen === 'editListing' && (
+          <EditListingScreen
+            vehicleId={editingVehicleId}
+            onNavigate={handleNavigate}
+            onSuccess={(msg?: string) => {
+              setListingSuccessMessage(msg || 'Anúncio atualizado.');
+              setCurrentScreen('myListings');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
           />
         )}
 

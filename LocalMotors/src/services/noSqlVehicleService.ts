@@ -19,9 +19,14 @@
 import type { Vehicle } from '../types/vehicle';
 import vehiclesJson from '../data/vehicles.json';
 
+// ─── Status do veículo ───────────────────────────────────────────────────────
+export type VehicleStatus = 'ativo' | 'oculto';
+
 // ─── Tipo do documento NoSQL ─────────────────────────────────────────────────
 export interface VehicleDocument {
   _id: string;
+  ownerId: string | null;
+  status: VehicleStatus;
   title: string;
   brand: string;
   model: string;
@@ -72,20 +77,35 @@ export interface VehicleQueryFilter {
 // ─── Constantes ──────────────────────────────────────────────────────────────
 const NOSQL_VEHICLES_KEY = 'motorlocal_nosql_vehicles_collection';
 
+// ─── Helpers de normalização ─────────────────────────────────────────────────
+type RawVehicleDoc = Partial<VehicleDocument> & Record<string, unknown>;
+
+function normalizeVehicleDoc(doc: RawVehicleDoc): VehicleDocument {
+  return {
+    ...(doc as VehicleDocument),
+    ownerId: typeof doc.ownerId === 'string' ? doc.ownerId : null,
+    status: (doc.status as VehicleStatus) || 'ativo',
+  };
+}
+
 // ─── Inicialização da coleção ────────────────────────────────────────────────
 function getCollection(): VehicleDocument[] {
   try {
     const raw = localStorage.getItem(NOSQL_VEHICLES_KEY);
     if (!raw) {
-      // Inicializa com os dados do JSON seed
-      const initialDocs = vehiclesJson as VehicleDocument[];
+      // Inicializa com os dados do JSON seed normalizados
+      const initialDocs = (vehiclesJson as unknown as RawVehicleDoc[]).map(normalizeVehicleDoc);
       localStorage.setItem(NOSQL_VEHICLES_KEY, JSON.stringify(initialDocs));
       return initialDocs;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return (parsed as RawVehicleDoc[]).map(normalizeVehicleDoc);
+    }
+    return [];
   } catch (err) {
     console.error('[NoSQL] Erro ao ler coleção de veículos:', err);
-    return vehiclesJson as VehicleDocument[];
+    return (vehiclesJson as unknown as RawVehicleDoc[]).map(normalizeVehicleDoc);
   }
 }
 
@@ -133,12 +153,18 @@ export function documentToVehicle(doc: VehicleDocument): Vehicle {
 
 /** Converte Vehicle → VehicleDocument parcial (para inserção) */
 export function vehicleToDocument(
-  vehicle: Omit<Vehicle, 'id'> & { vehicleType?: 'carro' | 'moto' | 'utilitario' }
+  vehicle: Omit<Vehicle, 'id'> & {
+    vehicleType?: 'carro' | 'moto' | 'utilitario';
+    ownerId?: string | null;
+    status?: VehicleStatus;
+  }
 ): Omit<VehicleDocument, '_id' | 'createdAt' | 'updatedAt'> {
   const locationParts = vehicle.location.split(' - ');
   const mileageNum = parseInt(vehicle.mileage.replace(/\D/g, ''), 10) || 0;
 
   return {
+    ownerId: vehicle.ownerId !== undefined ? vehicle.ownerId : null,
+    status: vehicle.status || 'ativo',
     title: vehicle.title,
     brand: vehicle.brand,
     model: vehicle.model,
@@ -198,6 +224,9 @@ export async function noSqlFindVehicles(
 ): Promise<VehicleDocument[]> {
   await new Promise((r) => setTimeout(r, 400)); // Simula latência
   let results = getCollection();
+
+  // Visibilidade pública: apenas anúncios ativos
+  results = results.filter((doc) => doc.status === 'ativo');
 
   // Filtro: tipo de veículo
   if (query.vehicleType && query.vehicleType.length > 0 && !query.vehicleType.includes('Todos')) {
@@ -298,6 +327,8 @@ export async function noSqlInsertVehicle(
 
   const newDoc: VehicleDocument = {
     ...vehicleData,
+    ownerId: vehicleData.ownerId !== undefined ? vehicleData.ownerId : null,
+    status: vehicleData.status || 'ativo',
     _id: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -311,12 +342,27 @@ export async function noSqlInsertVehicle(
 }
 
 /**
+ * db.vehicles.find({ ownerId })
+ * Retorna todos os anúncios daquele dono (qualquer status), do mais novo para o mais antigo (createdAt).
+ */
+export async function noSqlFindVehiclesByOwner(
+  ownerId: string
+): Promise<VehicleDocument[]> {
+  await new Promise((r) => setTimeout(r, 300));
+  const collection = getCollection();
+  return collection
+    .filter((doc) => doc.ownerId === ownerId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+/**
  * db.vehicles.updateOne({ _id }, { $set: updates })
- * Atualiza campos de um documento existente.
+ * Atualiza campos de um documento existente verificando a permissão do proprietário.
  */
 export async function noSqlUpdateVehicle(
   _id: string,
-  updates: Partial<VehicleDocument>
+  updates: Partial<VehicleDocument>,
+  requesterId: string
 ): Promise<VehicleDocument | null> {
   await new Promise((r) => setTimeout(r, 400));
   const collection = getCollection();
@@ -327,11 +373,24 @@ export async function noSqlUpdateVehicle(
     return null;
   }
 
+  const existing = collection[index];
+  if (existing.ownerId === null || existing.ownerId !== requesterId) {
+    throw new Error('Sem permissão para alterar este anúncio.');
+  }
+
+  // Ignora _id, ownerId e status vindos em updates
+  const safeUpdates: Partial<VehicleDocument> = { ...updates };
+  delete safeUpdates._id;
+  delete safeUpdates.ownerId;
+  delete safeUpdates.status;
+
   collection[index] = {
-    ...collection[index],
-    ...updates,
-    _id: collection[index]._id, // Protege _id de ser sobrescrito
-    createdAt: collection[index].createdAt,
+    ...existing,
+    ...safeUpdates,
+    _id: existing._id,
+    ownerId: existing.ownerId,
+    status: existing.status,
+    createdAt: existing.createdAt,
     updatedAt: new Date().toISOString(),
   };
 
@@ -342,18 +401,26 @@ export async function noSqlUpdateVehicle(
 
 /**
  * db.vehicles.deleteOne({ _id })
- * Remove um documento da coleção.
+ * Remove um documento da coleção verificando a permissão do proprietário.
  */
-export async function noSqlDeleteVehicle(_id: string): Promise<boolean> {
+export async function noSqlDeleteVehicle(
+  _id: string,
+  requesterId: string
+): Promise<boolean> {
   await new Promise((r) => setTimeout(r, 300));
   const collection = getCollection();
-  const filtered = collection.filter((doc) => doc._id !== _id);
+  const doc = collection.find((d) => d._id === _id);
 
-  if (filtered.length === collection.length) {
+  if (!doc) {
     console.warn(`[NoSQL] deleteOne → Documento ${_id} não encontrado.`);
     return false;
   }
 
+  if (doc.ownerId === null || doc.ownerId !== requesterId) {
+    throw new Error('Sem permissão para alterar este anúncio.');
+  }
+
+  const filtered = collection.filter((d) => d._id !== _id);
   saveCollection(filtered);
   console.log(`[NoSQL] deleteOne → Documento ${_id} removido.`);
   return true;
@@ -380,7 +447,7 @@ export async function noSqlCountVehicles(
  */
 export async function getAllVehiclesAsViewModel(): Promise<Vehicle[]> {
   const docs = await noSqlFindAllVehicles();
-  return docs.map(documentToVehicle);
+  return docs.filter((doc) => doc.status === 'ativo').map(documentToVehicle);
 }
 
 /**
