@@ -8,6 +8,7 @@ export interface UserDocument {
   accountType: 'pf' | 'pj';
   createdAt: string;
   isConfirmed?: boolean;
+  picture?: string;
 }
 
 const NOSQL_USERS_KEY = 'motorlocal_nosql_users_collection';
