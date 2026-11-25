@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import type { ScreenType, Vehicle } from '../../types/vehicle';
-import { MOCK_VEHICLES } from '../../data/mockVehicles';
 import { noSqlFindAllVehicles, documentToVehicle } from '../../services/noSqlVehicleService';
 import { getActiveSession } from '../../services/noSqlAuthService';
 import type { UserDocument } from '../../services/noSqlAuthService';
@@ -185,7 +184,7 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
     }
   };
 
-  const [vehicles, setVehicles] = useState<Vehicle[]>(MOCK_VEHICLES);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [sortBy, setSortBy] = useState<string>('recent');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -196,10 +195,8 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
     const loadVehicles = async () => {
       try {
         const docs = await noSqlFindAllVehicles();
-        if (docs && docs.length > 0) {
-          const activeDocs = docs.filter((doc) => doc.status === 'ativo');
-          setVehicles(activeDocs.map(documentToVehicle));
-        }
+        const activeDocs = docs.filter((doc) => doc.status === 'ativo');
+        setVehicles(activeDocs.map(documentToVehicle));
       } catch (err) {
         console.error('Erro ao carregar veículos do vendedor:', err);
       }

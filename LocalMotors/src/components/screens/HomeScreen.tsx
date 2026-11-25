@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { ScreenType, Vehicle } from '../../types/vehicle';
-import { MOCK_VEHICLES } from '../../data/mockVehicles';
+import { documentToVehicle, noSqlFindVehicles } from '../../services/noSqlVehicleService';
 import {
   IconMapPin,
   IconCar,
@@ -28,8 +28,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [selectedCity, setSelectedCity] = useState('Pau dos Ferros - RN');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [searchModel, setSearchModel] = useState('');
+  const [featuredVehicles, setFeaturedVehicles] = useState<Vehicle[]>([]);
 
-  const featuredVehicles = MOCK_VEHICLES.filter((v) => v.featured).slice(0, 5);
+  useEffect(() => {
+    let active = true;
+    noSqlFindVehicles({ sort: 'newest' })
+      .then((documents) => { if (active) setFeaturedVehicles(documents.slice(0, 5).map(documentToVehicle)); })
+      .catch((error) => { if (active) console.error('Erro ao carregar anúncios:', error); });
+    return () => { active = false; };
+  }, []);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
