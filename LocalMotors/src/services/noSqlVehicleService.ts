@@ -63,7 +63,7 @@ function queryString(query: VehicleQueryFilter): string {
 
 export function documentToVehicle(doc: VehicleDocument): Vehicle {
   return {
-    id: doc._id, title: doc.title, brand: doc.brand, model: doc.model, year: doc.year,
+    id: doc._id, ownerId: doc.ownerId, status: doc.status, title: doc.title, brand: doc.brand, model: doc.model, year: doc.year,
     mileage: doc.mileageFormatted || `${doc.mileage.toLocaleString('pt-BR')} km`,
     location: doc.location, city: doc.city, price: doc.price, fipePrice: doc.fipePrice,
     fipeBadge: doc.fipeBadge || undefined, badges: doc.badges || [],

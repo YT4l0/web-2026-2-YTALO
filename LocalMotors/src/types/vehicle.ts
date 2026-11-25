@@ -1,7 +1,9 @@
-export type ScreenType = 'home' | 'search' | 'detail' | 'login' | 'register' | 'favorites' | 'publish' | 'seller' | 'myListings' | 'editListing';
+export type ScreenType = 'home' | 'search' | 'detail' | 'login' | 'register' | 'favorites' | 'publish' | 'seller' | 'myListings' | 'editListing' | 'conversations';
 
 export interface Vehicle {
   id: string;
+  ownerId?: string | null;
+  status?: 'ativo' | 'oculto';
   title: string;
   brand: string;
   model: string;

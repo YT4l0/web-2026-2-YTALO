@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": { "check": "node --check src/handler.mjs" },
+  "scripts": {
+    "check": "node --check src/handler.mjs && node --check src/conversationsHandler.mjs"
+  },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.930.0",
     "@aws-sdk/client-s3": "^3.930.0",
