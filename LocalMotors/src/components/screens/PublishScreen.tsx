@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { ScreenType, Vehicle } from '../../types/vehicle';
-import { noSqlInsertVehicle } from '../../services/noSqlVehicleService';
+import { noSqlDeleteVehicle, noSqlInsertVehicle, uploadVehiclePhotos } from '../../services/noSqlVehicleService';
 import type { VehicleDocument } from '../../services/noSqlVehicleService';
 import { getActiveSession, toggleUserConfirmation } from '../../services/noSqlAuthService';
 import type { UserDocument } from '../../services/noSqlAuthService';
@@ -34,23 +34,7 @@ interface PhotoItem {
   isCover: boolean;
 }
 
-const DEFAULT_SAMPLE_PHOTOS: PhotoItem[] = [
-  {
-    id: 'p1',
-    url: 'https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?auto=format&fit=crop&w=1200&q=80',
-    isCover: true,
-  },
-  {
-    id: 'p2',
-    url: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=1200&q=80',
-    isCover: false,
-  },
-  {
-    id: 'p3',
-    url: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1200&q=80',
-    isCover: false,
-  },
-];
+const DEFAULT_SAMPLE_PHOTOS: PhotoItem[] = [];
 
 interface StepIndicatorProps {
   currentStep: PublishStep;
@@ -155,7 +139,7 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
 
   // ── Step 3: Fotos ─────────────────────────────────────────────────────
   const [photos, setPhotos] = useState<PhotoItem[]>(DEFAULT_SAMPLE_PHOTOS);
-  const [newPhotoUrl, setNewPhotoUrl] = useState('');
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
 
   // ── Estados de Validação e Erros ──────────────────────────────────────
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -270,21 +254,26 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
   };
 
   // Gerenciamento de Fotos
-  const handleAddPhoto = () => {
-    if (!newPhotoUrl.trim()) return;
-    const newId = `photo_${Date.now()}`;
-    const isFirst = photos.length === 0;
-    setPhotos((prev) => [
-      ...prev,
-      { id: newId, url: newPhotoUrl.trim(), isCover: isFirst },
-    ]);
-    setNewPhotoUrl('');
+  const handleAddPhoto = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(event.target.files || []);
+    const valid = selected.filter((file) => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) && file.size <= 8 * 1024 * 1024);
+    const accepted = valid.slice(0, Math.max(0, 10 - photoFiles.length));
+    setPhotoFiles((prev) => [...prev, ...accepted]);
+    setPhotos((prev) => [...prev, ...accepted.map((file, index) => ({
+      id: `${file.name}_${file.lastModified}_${index}`,
+      url: URL.createObjectURL(file),
+      isCover: prev.length === 0 && index === 0,
+    }))]);
+    if (accepted.length !== selected.length) setStepErrorAlert('Use até 10 imagens JPEG, PNG ou WebP de no máximo 8 MB cada.');
+    event.target.value = '';
     if (errors.photos) {
       setErrors((prev) => ({ ...prev, photos: '' }));
     }
   };
 
   const handleRemovePhoto = (id: string) => {
+    const index = photos.findIndex((photo) => photo.id === id);
+    if (index >= 0) setPhotoFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index));
     setPhotos((prev) => {
       const remaining = prev.filter((p) => p.id !== id);
       if (remaining.length > 0 && !remaining.some((p) => p.isCover)) {
@@ -292,13 +281,6 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
       }
       return remaining;
     });
-  };
-
-  const handleRestoreSamplePhotos = () => {
-    setPhotos(DEFAULT_SAMPLE_PHOTOS);
-    if (errors.photos) {
-      setErrors((prev) => ({ ...prev, photos: '' }));
-    }
   };
 
   const handleSetCover = (id: string) => {
@@ -487,11 +469,8 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
     try {
       const numericPrice = parseInt(price.replace(/\D/g, ''), 10);
       const numericMileage = parseInt(mileage.replace(/\D/g, ''), 10);
-      const coverPhoto =
-        photos.find((p) => p.isCover)?.url ||
-        photos[0]?.url ||
-        'https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?auto=format&fit=crop&w=1200&q=80';
-      const allPhotoUrls = photos.map((p) => p.url);
+      const coverIndex = Math.max(0, photos.findIndex((photo) => photo.isCover));
+      const orderedFiles = [photoFiles[coverIndex], ...photoFiles.filter((_, index) => index !== coverIndex)];
 
       const sellerDisplayName = effectiveUser ? effectiveUser.name : 'Particular';
       const sellerType = effectiveUser?.accountType === 'pj' ? 'Revendedora Verificada' : 'Particular';
@@ -504,9 +483,7 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
 
       const fullTitle = title.trim() || `${brand.trim()} ${model.trim()} ${version.trim()}`.trim();
 
-      const newVehicleDoc: Omit<VehicleDocument, '_id' | 'createdAt' | 'updatedAt'> = {
-        ownerId: effectiveUser ? effectiveUser._id : null,
-        status: 'ativo',
+      const newVehicleDoc: Omit<VehicleDocument, '_id' | 'ownerId' | 'status' | 'createdAt' | 'updatedAt'> = {
         title: fullTitle,
         brand,
         model,
@@ -517,15 +494,15 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
         city: city.split(' - ')[0]?.trim() || city,
         state: city.split(' - ')[1]?.trim() || 'RN',
         price: numericPrice,
-        fipePrice: fipePrice ?? Math.round(numericPrice * 1.03),
-        fipeBadge: fipeLabel || 'FIPE Checada',
+        fipePrice,
+        fipeBadge: fipePrice ? fipeLabel || null : null,
         badges: ['Novo'],
         transmission,
         fuel,
         color,
         featured: false,
-        mainImage: coverPhoto,
-        gallery: allPhotoUrls.length > 0 ? allPhotoUrls : [coverPhoto],
+        mainImage: '',
+        gallery: [],
         seller: {
           name: sellerDisplayName,
           type: sellerType,
@@ -537,7 +514,14 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
         vehicleType: vehicleType === 'motos' ? 'moto' : vehicleType === 'caminhoes' ? 'utilitario' : 'carro',
       };
 
-      const doc = await noSqlInsertVehicle(newVehicleDoc);
+      const created = await noSqlInsertVehicle(newVehicleDoc);
+      let doc: VehicleDocument;
+      try {
+        doc = await uploadVehiclePhotos(created._id, orderedFiles);
+      } catch (uploadError) {
+        await noSqlDeleteVehicle(created._id).catch(() => undefined);
+        throw uploadError;
+      }
 
       const createdVehicle: Vehicle = {
         id: doc._id,
@@ -565,7 +549,7 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
       setIsSuccess(true);
     } catch (err) {
       console.error('Erro ao publicar veículo:', err);
-      alert('Erro ao publicar o anúncio.');
+      setStepErrorAlert(err instanceof Error ? err.message : 'Erro ao publicar o anúncio.');
     } finally {
       setIsSubmitting(false);
     }
@@ -1237,37 +1221,24 @@ export const PublishScreen: React.FC<PublishScreenProps> = ({ onNavigate, onSele
                     <span>⚠️</span>
                     <span className="font-semibold">{errors.photos}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleRestoreSamplePhotos}
-                    className="text-xs font-bold text-blue-600 underline hover:text-blue-800 text-left"
-                  >
-                    Restaurar fotos de demonstração
-                  </button>
                 </div>
               )}
 
               {/* Input para adicionar nova imagem */}
               <div className="p-4 bg-[#f8fafc] rounded-2xl border border-slate-200 space-y-3">
                 <label className="block text-xs font-bold text-slate-700">
-                  Adicionar foto por URL (ou usar amostras abaixo)
+                  Adicionar fotografias reais
                 </label>
                 <div className="flex gap-2">
                   <input
-                    type="url"
-                    placeholder="https://exemplo.com/foto-do-carro.jpg"
-                    value={newPhotoUrl}
-                    onChange={(e) => setNewPhotoUrl(e.target.value)}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    onChange={handleAddPhoto}
                     className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
                   />
-                  <button
-                    type="button"
-                    onClick={handleAddPhoto}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-colors"
-                  >
-                    Adicionar
-                  </button>
                 </div>
+                <p className="text-[11px] text-slate-500">Até 10 arquivos JPEG, PNG ou WebP, com no máximo 8 MB cada.</p>
               </div>
 
               {/* Galeria de Previews */}

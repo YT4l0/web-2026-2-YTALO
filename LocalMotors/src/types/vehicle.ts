@@ -10,7 +10,7 @@ export interface Vehicle {
   location: string;
   city: string;
   price: number;
-  fipePrice: number;
+  fipePrice: number | null;
   fipeBadge?: string;
   badges: string[]; // e.g. ['Destaque', 'Revendedora'], ['Novo']
   transmission: string;

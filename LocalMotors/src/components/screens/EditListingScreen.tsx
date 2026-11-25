@@ -189,8 +189,6 @@ export const EditListingScreen: React.FC<EditListingScreenProps> = ({
         fuel: fuel.trim(),
         color: color.trim(),
         description: description.trim(),
-        mainImage: photos[0],
-        gallery: photos,
       };
 
       await noSqlUpdateVehicle(vehicleId, updates, user.id);
