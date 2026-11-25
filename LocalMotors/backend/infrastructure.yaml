@@ -1,0 +1,144 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Recursos propostos para o RF-02 do MotorLocal (não implantados)
+
+Parameters:
+  CognitoUserPoolId:
+    Type: String
+  CognitoClientId:
+    Type: String
+  AllowedOrigin:
+    Type: String
+    Default: https://ytalodias.zangado.web.ufersa.dev.br
+  ExistingLambdaRoleArn:
+    Type: String
+    Description: ARN da LabRole ou de outra role permitida pelo Learner Lab
+
+Resources:
+  VehiclesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ytalodias-vehicles-2026.2
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: vehicleId
+          AttributeType: S
+        - AttributeName: ownerId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: vehicleId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ownerId-createdAt-index
+          KeySchema:
+            - AttributeName: ownerId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  VehiclePhotosBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins: [!Ref AllowedOrigin, http://localhost:5173]
+            AllowedMethods: [PUT, GET]
+            AllowedHeaders: ['*']
+            ExposedHeaders: [ETag]
+            MaxAge: 300
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+  VehiclesApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins: [!Ref AllowedOrigin, http://localhost:5173]
+        AllowHeaders: [Authorization, Content-Type]
+        AllowMethods: [GET, POST, PATCH, DELETE, OPTIONS]
+      Auth:
+        Authorizers:
+          CognitoJwt:
+            JwtConfiguration:
+              issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPoolId}
+              audience: [!Ref CognitoClientId]
+            IdentitySource: $request.header.Authorization
+
+  VehiclesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/handler.handler
+      Runtime: nodejs22.x
+      Role: !Ref ExistingLambdaRoleArn
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          VEHICLES_TABLE_NAME: !Ref VehiclesTable
+          VEHICLES_OWNER_INDEX: ownerId-createdAt-index
+          VEHICLES_BUCKET_NAME: !Ref VehiclePhotosBucket
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+          MAX_PHOTOS: '10'
+          MAX_PHOTO_BYTES: '8388608'
+      Events:
+        ListVehicles:
+          Type: HttpApi
+          Properties: { ApiId: !Ref VehiclesApi, Path: /vehicles, Method: GET }
+        GetVehicle:
+          Type: HttpApi
+          Properties: { ApiId: !Ref VehiclesApi, Path: /vehicles/{id}, Method: GET }
+        CreateVehicle:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref VehiclesApi
+            Path: /vehicles
+            Method: POST
+            Auth: { Authorizer: CognitoJwt }
+        ListMyVehicles:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref VehiclesApi
+            Path: /me/vehicles
+            Method: GET
+            Auth: { Authorizer: CognitoJwt }
+        UpdateVehicle:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref VehiclesApi
+            Path: /vehicles/{id}
+            Method: PATCH
+            Auth: { Authorizer: CognitoJwt }
+        DeleteVehicle:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref VehiclesApi
+            Path: /vehicles/{id}
+            Method: DELETE
+            Auth: { Authorizer: CognitoJwt }
+        PreparePhotoUploads:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref VehiclesApi
+            Path: /vehicles/{id}/photo-uploads
+            Method: POST
+            Auth: { Authorizer: CognitoJwt }
