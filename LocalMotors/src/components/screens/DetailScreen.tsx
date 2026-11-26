@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { ScreenType, Vehicle } from '../../types/vehicle';
 import { MOCK_VEHICLES } from '../../data/mockVehicles';
+import { useAuth } from '../../context/AuthContext';
 import {
   IconMapPin,
   IconHeart,
@@ -18,6 +19,7 @@ interface DetailScreenProps {
   onToggleFavorite?: (vehicleId: string) => void;
   onNavigate: (screen: ScreenType) => void;
   onViewSeller?: (sellerName: string) => void;
+  onStartConversation?: (vehicle: Vehicle) => Promise<void> | void;
 }
 
 export const DetailScreen: React.FC<DetailScreenProps> = ({
@@ -26,13 +28,49 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({
   onToggleFavorite,
   onNavigate,
   onViewSeller,
+  onStartConversation,
 }) => {
+  const { user, isAuthenticated } = useAuth();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [showInterestModal, setShowInterestModal] = useState(false);
+  const [isStartingChat, setIsStartingChat] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('Preço suspeito ou abusivo');
   const [reportDetails, setReportDetails] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const isOwnListing = Boolean(user?.id && vehicle.ownerId && user.id === vehicle.ownerId);
+  const isUnavailable = vehicle.status === 'oculto';
+
+  const handleStartChat = async () => {
+    setChatError(null);
+    if (!isAuthenticated) {
+      onNavigate('login');
+      return;
+    }
+    if (isOwnListing) {
+      setChatError('Você é o anunciante deste veículo e não pode iniciar uma conversa consigo mesmo.');
+      return;
+    }
+    if (isUnavailable) {
+      setChatError('Este anúncio não está mais ativo para novas conversas.');
+      return;
+    }
+    if (!onStartConversation) return;
+
+    setIsStartingChat(true);
+    try {
+      await onStartConversation(vehicle);
+    } catch (err) {
+      setChatError(
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível iniciar a conversa com o vendedor.'
+      );
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -226,13 +264,33 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({
               </div>
 
               {/* Primary action */}
-              <button
-                onClick={() => setShowInterestModal(true)}
-                className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all active:scale-[0.98]"
-              >
-                <IconMessageSquare size={18} />
-                Tenho interesse
-              </button>
+              {isOwnListing ? (
+                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium leading-relaxed">
+                  Este anúncio pertence a você. Não é possível iniciar uma conversa consigo mesmo.
+                </div>
+              ) : (
+                <button
+                  onClick={() => void handleStartChat()}
+                  disabled={isStartingChat || isUnavailable}
+                  className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-400 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all active:scale-[0.98]"
+                >
+                  <IconMessageSquare size={18} />
+                  {isStartingChat
+                    ? 'Abrindo conversa...'
+                    : isUnavailable
+                      ? 'Anúncio indisponível'
+                      : 'Conversar com vendedor'}
+                </button>
+              )}
+
+              {chatError && (
+                <div
+                  role="alert"
+                  className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium"
+                >
+                  {chatError}
+                </div>
+              )}
 
               {/* Secondary actions */}
               <div className="grid grid-cols-2 gap-3 pt-1">
@@ -298,13 +356,16 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({
                   Ver Perfil e Estoque do Vendedor
                 </button>
 
-                <button
-                  onClick={() => setShowInterestModal(true)}
-                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm"
-                >
-                  <IconMessageSquare size={15} />
-                  Conversar com anunciante
-                </button>
+                {!isOwnListing && (
+                  <button
+                    onClick={() => void handleStartChat()}
+                    disabled={isStartingChat || isUnavailable}
+                    className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-400 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <IconMessageSquare size={15} />
+                    {isStartingChat ? 'Abrindo conversa...' : 'Conversar com vendedor'}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -332,74 +393,6 @@ export const DetailScreen: React.FC<DetailScreenProps> = ({
           </div>
         </div>
       </div>
-
-      {/* INTEREST MODAL */}
-      {showInterestModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-6 animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <h3 className="text-lg font-bold text-slate-900">Contato com o Anunciante</h3>
-              <button
-                onClick={() => setShowInterestModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-sm font-bold w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-100"
-              >
-                ✕
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500">
-              Você está interessado em <strong className="text-slate-800">{vehicle.title}</strong> com o vendedor{' '}
-              <strong className="text-slate-800">{vehicle.seller.name}</strong>.
-            </p>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                setShowInterestModal(false);
-                triggerToast(`Mensagem enviada com sucesso para ${vehicle.seller.name}!`);
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Seu Nome</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Seu nome completo"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">WhatsApp ou Telefone</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="(84) 99999-0000"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">Mensagem</label>
-                <textarea
-                  rows={3}
-                  defaultValue={`Olá, vi o anúncio do ${vehicle.title} no MotorLocal e gostaria de mais informações.`}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-blue-500 resize-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-md transition-colors flex items-center justify-center gap-2"
-              >
-                <IconCheck size={16} />
-                Enviar Mensagem
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* REPORT MODAL (From Stitch) */}
       {showReportModal && (

@@ -142,3 +142,107 @@ Resources:
             Path: /vehicles/{id}/photo-uploads
             Method: POST
             Auth: { Authorizer: CognitoJwt }
+
+  ConversationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ytalodias-conversations-2026.2
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: conversationId
+          AttributeType: S
+        - AttributeName: buyerId
+          AttributeType: S
+        - AttributeName: sellerId
+          AttributeType: S
+        - AttributeName: updatedAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: conversationId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: buyerId-updatedAt-index
+          KeySchema:
+            - AttributeName: buyerId
+              KeyType: HASH
+            - AttributeName: updatedAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: sellerId-updatedAt-index
+          KeySchema:
+            - AttributeName: sellerId
+              KeyType: HASH
+            - AttributeName: updatedAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  ChatMessagesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ytalodias-chat-messages-2026.2
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: conversationId
+          AttributeType: S
+        - AttributeName: createdAtMessageId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: conversationId
+          KeyType: HASH
+        - AttributeName: createdAtMessageId
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  ConversationsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/conversationsHandler.handler
+      Runtime: nodejs22.x
+      Role: !Ref ExistingLambdaRoleArn
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          VEHICLES_TABLE_NAME: !Ref VehiclesTable
+          CONVERSATIONS_TABLE_NAME: !Ref ConversationsTable
+          MESSAGES_TABLE_NAME: !Ref ChatMessagesTable
+          CONVERSATIONS_BUYER_INDEX: buyerId-updatedAt-index
+          CONVERSATIONS_SELLER_INDEX: sellerId-updatedAt-index
+          VEHICLES_BUCKET_NAME: !Ref VehiclePhotosBucket
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+          MAX_MESSAGE_LENGTH: '1000'
+      Events:
+        CreateOrGetConversation:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref VehiclesApi
+            Path: /conversations
+            Method: POST
+            Auth: { Authorizer: CognitoJwt }
+        ListConversations:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref VehiclesApi
+            Path: /conversations
+            Method: GET
+            Auth: { Authorizer: CognitoJwt }
+        ListMessages:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref VehiclesApi
+            Path: /conversations/{conversationId}/messages
+            Method: GET
+            Auth: { Authorizer: CognitoJwt }
+        SendMessage:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref VehiclesApi
+            Path: /conversations/{conversationId}/messages
+            Method: POST
+            Auth: { Authorizer: CognitoJwt }

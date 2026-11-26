@@ -169,6 +169,18 @@ export const Header: React.FC<HeaderProps> = ({
                 Meus anúncios
               </button>
             )}
+            {currentUser && (
+              <button
+                onClick={() => onNavigate('conversations')}
+                className={`transition-colors py-2 border-b-2 flex items-center gap-1.5 ${
+                  currentScreen === 'conversations'
+                    ? 'text-blue-400 border-blue-500 font-semibold'
+                    : 'text-slate-300 border-transparent hover:text-white'
+                }`}
+              >
+                Conversas
+              </button>
+            )}
             <button
               onClick={handleSellerProfileClick}
               className={`transition-colors py-2 border-b-2 ${
@@ -185,6 +197,20 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-3">
             {currentUser ? (
               <div className="flex items-center gap-2.5">
+                <button
+                  onClick={() => onNavigate('conversations')}
+                  className={`md:hidden p-2 rounded-xl border transition-colors ${
+                    currentScreen === 'conversations'
+                      ? 'bg-blue-600 text-white border-blue-500'
+                      : 'bg-slate-800/80 text-slate-300 hover:text-white border-slate-700/60'
+                  }`}
+                  title="Conversas"
+                  aria-label="Conversas"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                </button>
                 <button
                   onClick={handleSellerProfileClick}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 transition-colors text-left"

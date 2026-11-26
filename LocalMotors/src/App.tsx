@@ -14,8 +14,11 @@ import { RegisterScreen } from './components/screens/RegisterScreen';
 import { FavoritesScreen } from './components/screens/FavoritesScreen';
 import { MyListingsScreen } from './components/screens/MyListingsScreen';
 import { EditListingScreen } from './components/screens/EditListingScreen';
+import { ConversationsScreen } from './components/screens/ConversationsScreen';
 import { ChatWidget } from './components/chat/ChatWidget';
 import { AUTH_MODE } from './config/cognito';
+import { createOrGetConversation } from './services/conversationService';
+import type { Conversation } from './types/conversation';
 
 export function App() {
   const { user, isAuthenticated, isLoading, signOut } = useAuth();
@@ -25,6 +28,7 @@ export function App() {
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [listingSuccessMessage, setListingSuccessMessage] = useState<string | null>(null);
+  const [initialConversation, setInitialConversation] = useState<Conversation | null>(null);
 
   // Navega para 'home' somente apÃ³s a sessÃ£o Cognito ser confirmada pelo AuthContext.
   // NUNCA baseie a navegaÃ§Ã£o na presenÃ§a de '?code=' na URL â€” isso sÃ³ indica que o
@@ -58,12 +62,13 @@ export function App() {
   };
 
   const handleNavigate = (screen: ScreenType) => {
-    // Rotas protegidas (publicar anúncio, favoritos persistentes, meus anúncios, editar anúncio) exigem isAuthenticated
+    // Rotas protegidas (publicar anúncio, favoritos persistentes, meus anúncios, editar anúncio, conversas) exigem isAuthenticated
     if (
       (screen === 'publish' ||
         screen === 'favorites' ||
         screen === 'myListings' ||
-        screen === 'editListing') &&
+        screen === 'editListing' ||
+        screen === 'conversations') &&
       !isAuthenticated
     ) {
       setCurrentScreen('login');
@@ -75,6 +80,19 @@ export function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleStartConversation = async (vehicle: Vehicle) => {
+    if (!isAuthenticated) {
+      setCurrentScreen('login');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    const conversation = await createOrGetConversation(vehicle.id);
+    setInitialConversation(conversation);
+    setCurrentScreen('conversations');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleLoginSuccess = () => {
     setCurrentScreen('home');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -82,11 +100,13 @@ export function App() {
 
   const handleLogout = async () => {
     await signOut();
+    setInitialConversation(null);
     if (
       currentScreen === 'publish' ||
       currentScreen === 'favorites' ||
       currentScreen === 'myListings' ||
-      currentScreen === 'editListing'
+      currentScreen === 'editListing' ||
+      currentScreen === 'conversations'
     ) {
       setCurrentScreen('home');
     }
@@ -166,6 +186,7 @@ export function App() {
             onToggleFavorite={handleToggleFavorite}
             onNavigate={handleNavigate}
             onViewSeller={handleViewSeller}
+            onStartConversation={handleStartConversation}
           />
         )}
 
@@ -214,6 +235,15 @@ export function App() {
               setCurrentScreen('myListings');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
+          />
+        )}
+
+        {currentScreen === 'conversations' && (
+          <ConversationsScreen
+            initialConversation={initialConversation}
+            onClearInitialConversation={() => setInitialConversation(null)}
+            onNavigate={handleNavigate}
+            onSelectVehicle={handleSelectVehicle}
           />
         )}
 
