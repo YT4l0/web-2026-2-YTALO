@@ -43,3 +43,24 @@ Configure o HTTP API para `Authorization` e `Content-Type` e os métodos `GET, P
 ## Empacotamento local
 
 Execute `npm install` nesta pasta antes de empacotar a Lambda. `npm run check` valida a sintaxe sem acessar AWS. O arquivo `infrastructure.yaml` deve ser comparado com os recursos existentes antes de qualquer implantação no Learner Lab.
+
+## Sistema de Conversas (HTTP + WebSocket)
+
+Os arquivos do módulo de conversas ficam em `src/conversationsHandler.mjs`, `src/websocketHandler.mjs`, `src/connectionsRepository.mjs`, `src/websocketPublisher.mjs` e `src/tokenVerifier.mjs`.
+
+### Variáveis de ambiente das conversas
+
+| Variável | Componente | Finalidade | Obrigatória | Exemplo estrutural |
+| --- | --- | --- | --- | --- |
+| `CONVERSATIONS_TABLE_NAME` | Backend HTTP | Tabela DynamoDB de conversas | Sim | `ytalodias-conversations-2026.2` |
+| `MESSAGES_TABLE_NAME` | Backend HTTP | Tabela DynamoDB de mensagens | Sim | `ytalodias-chat-messages-2026.2` |
+| `VEHICLES_TABLE_NAME` | Backend HTTP | Tabela DynamoDB de veículos | Sim | `ytalodias-vehicles-2026.2` |
+| `CONVERSATIONS_BUYER_INDEX` | Backend HTTP | GSI do comprador | Opcional | `buyerId-updatedAt-index` |
+| `CONVERSATIONS_SELLER_INDEX` | Backend HTTP | GSI do vendedor | Opcional | `sellerId-updatedAt-index` |
+| `CONNECTIONS_TABLE` | HTTP e WebSocket | Tabela DynamoDB de conexões WebSocket | Sim | `ytalodias-connections-2026.2` |
+| `CONNECTIONS_USER_INDEX` | HTTP e WebSocket | GSI por `userId` | Opcional | `userId-index` |
+| `WEBSOCKET_API_ENDPOINT` | Backend HTTP | Endpoint HTTPS `@connections` do API Gateway | Opcional (sem ela, ignora push WS) | `https://{api-id}.execute-api.{region}.amazonaws.com/production` |
+| `COGNITO_USER_POOL_ID` | Backend WebSocket | ID do User Pool Cognito | Sim | `{region}_{poolId}` |
+| `COGNITO_APP_CLIENT_ID` | Backend WebSocket | Client ID do App Client Cognito | Sim | `{appClientId}` |
+| `AWS_REGION` | Backend WebSocket | Região AWS (fornecida pela Lambda) | Sim | `us-east-1` |
+| `VITE_CONVERSATIONS_WEBSOCKET_URL` | Frontend | URL `wss://` do WebSocket de conversas | Opcional (fallback HTTP) | `wss://{api-id}.execute-api.{region}.amazonaws.com/production` |

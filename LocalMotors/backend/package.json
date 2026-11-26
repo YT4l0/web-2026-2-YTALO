@@ -4,12 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check src/handler.mjs && node --check src/conversationsHandler.mjs"
+    "check": "node --check src/handler.mjs && node --check src/conversationsHandler.mjs && node --check src/websocketHandler.mjs && node --check src/connectionsRepository.mjs && node --check src/websocketPublisher.mjs && node --check src/tokenVerifier.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.930.0",
     "@aws-sdk/client-dynamodb": "^3.930.0",
     "@aws-sdk/client-s3": "^3.930.0",
     "@aws-sdk/lib-dynamodb": "^3.930.0",
-    "@aws-sdk/s3-request-presigner": "^3.930.0"
+    "@aws-sdk/s3-request-presigner": "^3.930.0",
+    "aws-jwt-verify": "^4.0.1"
   }
 }

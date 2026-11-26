@@ -7,6 +7,7 @@ import { IconUser, IconCheck } from '../icons/Icons';
 interface HeaderProps {
   currentScreen: ScreenType;
   favoriteCount?: number;
+  unreadConversationsCount?: number;
   currentUser?: AuthUser | UserDocument | null;
   onNavigate: (screen: ScreenType) => void;
   onLogout?: () => void;
@@ -39,11 +40,18 @@ const getSavedProfile = (userId?: string | null, email?: string | null): CustomP
 export const Header: React.FC<HeaderProps> = ({
   currentScreen,
   favoriteCount = 0,
+  unreadConversationsCount = 0,
   currentUser = null,
   onNavigate,
   onLogout,
   onViewSeller,
 }) => {
+  const safeUnreadCount = Math.max(0, unreadConversationsCount);
+  const unreadBadgeText = safeUnreadCount >= 100 ? '99+' : String(safeUnreadCount);
+  const conversationsAriaLabel =
+    safeUnreadCount > 0
+      ? `Conversas (${safeUnreadCount} mensagens não lidas)`
+      : 'Conversas';
   const currentUserId = currentUser ? ('id' in currentUser ? currentUser.id : currentUser._id) : null;
   const currentUserEmail = currentUser?.email || null;
 
@@ -172,13 +180,22 @@ export const Header: React.FC<HeaderProps> = ({
             {currentUser && (
               <button
                 onClick={() => onNavigate('conversations')}
+                aria-label={conversationsAriaLabel}
                 className={`transition-colors py-2 border-b-2 flex items-center gap-1.5 ${
                   currentScreen === 'conversations'
                     ? 'text-blue-400 border-blue-500 font-semibold'
                     : 'text-slate-300 border-transparent hover:text-white'
                 }`}
               >
-                Conversas
+                <span>Conversas</span>
+                {safeUnreadCount > 0 && (
+                  <span
+                    className="inline-flex items-center gap-1 bg-red-500 text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full min-w-[18px] justify-center leading-none"
+                    aria-hidden="true"
+                  >
+                    {unreadBadgeText}
+                  </span>
+                )}
               </button>
             )}
             <button
@@ -199,17 +216,25 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="flex items-center gap-2.5">
                 <button
                   onClick={() => onNavigate('conversations')}
-                  className={`md:hidden p-2 rounded-xl border transition-colors ${
+                  className={`md:hidden relative p-2 rounded-xl border transition-colors ${
                     currentScreen === 'conversations'
                       ? 'bg-blue-600 text-white border-blue-500'
                       : 'bg-slate-800/80 text-slate-300 hover:text-white border-slate-700/60'
                   }`}
-                  title="Conversas"
-                  aria-label="Conversas"
+                  title={conversationsAriaLabel}
+                  aria-label={conversationsAriaLabel}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                   </svg>
+                  {safeUnreadCount > 0 && (
+                    <span
+                      className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-extrabold px-1 min-w-[16px] h-4 rounded-full flex items-center justify-center leading-none shadow-sm"
+                      aria-hidden="true"
+                    >
+                      {unreadBadgeText}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={handleSellerProfileClick}

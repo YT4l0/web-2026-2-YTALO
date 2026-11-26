@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { ScreenType, Vehicle } from './types/vehicle';
 import { MOCK_VEHICLES } from './data/mockVehicles';
 import { useAuth } from './context/AuthContext';
+import { useConversations } from './context/ConversationsContext';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { HomeScreen } from './components/screens/HomeScreen';
@@ -22,6 +23,7 @@ import type { Conversation } from './types/conversation';
 
 export function App() {
   const { user, isAuthenticated, isLoading, signOut } = useAuth();
+  const { totalUnreadCount, upsertConversation } = useConversations();
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('home');
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle>(MOCK_VEHICLES[0]);
   const [selectedSellerName, setSelectedSellerName] = useState<string>('Carlos Motors');
@@ -88,6 +90,7 @@ export function App() {
     }
 
     const conversation = await createOrGetConversation(vehicle.id);
+    upsertConversation(conversation);
     setInitialConversation(conversation);
     setCurrentScreen('conversations');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -152,6 +155,7 @@ export function App() {
         <Header
           currentScreen={currentScreen}
           favoriteCount={favoriteIds.length}
+          unreadConversationsCount={totalUnreadCount}
           currentUser={user}
           onNavigate={handleNavigate}
           onLogout={handleLogout}
