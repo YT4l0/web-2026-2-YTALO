@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+﻿import { randomUUID } from 'node:crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { DeleteObjectsCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
@@ -26,7 +26,7 @@ const message = (statusCode, text) => reply(statusCode, { message: text });
 function identity(event) {
   const claims = event.requestContext?.authorizer?.jwt?.claims || event.requestContext?.authorizer?.claims || {};
   const ownerId = claims.sub;
-  if (!ownerId || claims.email_verified === 'false' || claims['cognito:user_status'] === 'UNCONFIRMED') return null;
+  if (!ownerId) return null;
   return { ownerId, name: claims.name || claims['cognito:username'] || claims.email || 'Vendedor', email: claims.email };
 }
 function parseBody(event) {

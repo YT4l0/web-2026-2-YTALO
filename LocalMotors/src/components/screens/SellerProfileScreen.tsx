@@ -57,17 +57,17 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
   const [currentUser] = useState<UserDocument | null>(() => getActiveSession());
   const effectiveUser: UserDocument | null = authUser
     ? {
-        _id: authUser.id,
-        email: authUser.email,
-        name: authUser.name,
-        picture: authUser.picture,
-        phone: currentUser?.phone,
-        city: currentUser?.city,
-        accountType: (authUser.accountType || 'pf') as 'pf' | 'pj',
-        createdAt: new Date().toISOString(),
-        isConfirmed: authUser.isConfirmed ?? true,
-        passwordHash: '',
-      }
+      _id: authUser.id,
+      email: authUser.email,
+      name: authUser.name,
+      picture: authUser.picture,
+      phone: currentUser?.phone,
+      city: currentUser?.city,
+      accountType: (authUser.accountType || 'pf') as 'pf' | 'pj',
+      createdAt: new Date().toISOString(),
+      isConfirmed: authUser.isConfirmed ?? true,
+      passwordHash: '',
+    }
     : currentUser;
 
   const [customProfile, setCustomProfile] = useState<CustomProfileData | null>(() => {
@@ -123,7 +123,7 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
         });
       }
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://api.ytalodias.zangado.web.ufersa.dev.br';
+      const apiUrl = import.meta.env.VITE_API_URL;
       let uploadedPhotoUrl = customProfile?.photoUrl;
 
       // Chama a rota PUT /profile no API Gateway
@@ -377,11 +377,10 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
                   </button>
                   <button
                     onClick={() => setActiveTab('profile')}
-                    className={`relative flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors text-left ${
-                      activeTab === 'profile'
+                    className={`relative flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors text-left ${activeTab === 'profile'
                         ? 'font-bold text-blue-600 bg-[#eaedff]'
                         : 'font-medium text-slate-600 hover:bg-[#f2f3ff] hover:text-blue-600'
-                    }`}
+                      }`}
                   >
                     {activeTab === 'profile' && (
                       <span className="absolute left-0 top-2 bottom-2 w-1.5 bg-blue-600 rounded-r-full" />
@@ -391,11 +390,10 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
                   </button>
                   <button
                     onClick={handleShowActiveListings}
-                    className={`relative flex items-center justify-between px-4 py-2.5 rounded-xl transition-colors text-left ${
-                      activeTab === 'listings'
+                    className={`relative flex items-center justify-between px-4 py-2.5 rounded-xl transition-colors text-left ${activeTab === 'listings'
                         ? 'font-bold text-blue-600 bg-[#eaedff]'
                         : 'font-medium text-slate-600 hover:bg-[#f2f3ff] hover:text-blue-600'
-                    }`}
+                      }`}
                   >
                     {activeTab === 'listings' && (
                       <span className="absolute left-0 top-2 bottom-2 w-1.5 bg-blue-600 rounded-r-full" />
@@ -405,11 +403,10 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
                       <span>Anúncios Ativos</span>
                     </div>
                     <span
-                      className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                        activeTab === 'listings'
+                      className={`text-xs font-bold px-2 py-0.5 rounded-full ${activeTab === 'listings'
                           ? 'bg-blue-600 text-white'
                           : 'bg-slate-200 text-slate-700'
-                      }`}
+                        }`}
                     >
                       {displayVehicles.length}
                     </span>
@@ -700,18 +697,16 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
                       <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 gap-1">
                         <button
                           onClick={() => setViewMode('grid')}
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-colors ${
-                            viewMode === 'grid' ? 'bg-blue-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-100'
-                          }`}
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-colors ${viewMode === 'grid' ? 'bg-blue-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-100'
+                            }`}
                           title="Visualização em Grade"
                         >
                           ▦
                         </button>
                         <button
                           onClick={() => setViewMode('list')}
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-colors ${
-                            viewMode === 'list' ? 'bg-blue-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-100'
-                          }`}
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-colors ${viewMode === 'list' ? 'bg-blue-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-100'
+                            }`}
                           title="Visualização em Lista"
                         >
                           ☰
@@ -728,11 +723,10 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
                       <button
                         key={cat}
                         onClick={() => setSelectedCategory(cat)}
-                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
-                          selectedCategory === cat
+                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${selectedCategory === cat
                             ? 'bg-blue-600 text-white shadow-sm'
                             : 'bg-[#f2f3ff] text-slate-600 hover:bg-blue-50 border border-slate-200'
-                        }`}
+                          }`}
                       >
                         {cat}
                       </button>
@@ -786,108 +780,106 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
                         : 'grid grid-cols-1 gap-4'
                     }
                   >
-                  {sortedVehicles.map((vehicle) => {
-                    const isFavorited = favoriteIds.includes(vehicle.id);
+                    {sortedVehicles.map((vehicle) => {
+                      const isFavorited = favoriteIds.includes(vehicle.id);
 
-                    return (
-                      <div
-                        key={vehicle.id}
-                        className={`bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-sm hover:shadow-md transition-all flex ${
-                          viewMode === 'grid' ? 'flex-col justify-between' : 'flex-col sm:flex-row items-stretch'
-                        }`}
-                      >
-                        {/* Imagem do veículo */}
-                        <div className={`relative ${viewMode === 'grid' ? 'h-48 w-full' : 'sm:w-60 h-48 sm:h-auto'}`}>
-                          <img
-                            src={vehicle.mainImage}
-                            alt={vehicle.title}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 items-start">
-                            {vehicle.fipeBadge && (
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-600 text-white shadow-sm">
-                                {vehicle.fipeBadge}
-                              </span>
-                            )}
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-900/80 backdrop-blur-sm text-white">
-                              Laudo Aprovado
-                            </span>
-                          </div>
-
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onToggleFavorite?.(vehicle.id);
-                            }}
-                            className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center transition-colors shadow-sm ${
-                              isFavorited ? 'bg-white text-red-500' : 'bg-white/90 text-slate-600 hover:text-red-500'
+                      return (
+                        <div
+                          key={vehicle.id}
+                          className={`bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-sm hover:shadow-md transition-all flex ${viewMode === 'grid' ? 'flex-col justify-between' : 'flex-col sm:flex-row items-stretch'
                             }`}
-                            title={isFavorited ? 'Remover dos favoritos' : 'Favoritar'}
-                          >
-                            <IconHeart size={16} className={isFavorited ? 'fill-red-500 text-red-500' : ''} />
-                          </button>
-
-                          <div className="absolute bottom-2 left-2.5 px-2 py-0.5 rounded bg-slate-900/80 backdrop-blur-sm text-white text-[10px] font-medium flex items-center gap-1">
-                            <IconMapPin size={11} />
-                            {vehicle.location}
-                          </div>
-                        </div>
-
-                        {/* Detalhes do Veículo */}
-                        <div className="p-4 flex flex-col gap-3 flex-1 justify-between">
-                          <div>
-                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
-                              {vehicle.brand} • {vehicle.year}
-                            </div>
-                            <h4 className="font-extrabold text-sm text-slate-900 leading-snug line-clamp-1">
-                              {vehicle.title}
-                            </h4>
-                            <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
-                              <span>{vehicle.mileage}</span>
-                              <span>•</span>
-                              <span>{vehicle.transmission}</span>
-                              <span>•</span>
-                              <span>{vehicle.fuel}</span>
-                            </div>
-                          </div>
-
-                          <div className="pt-2 border-t border-slate-100">
-                            <div className="flex items-baseline justify-between mb-3">
-                              <div>
-                                <span className="text-[10px] text-slate-400 uppercase font-medium block">
-                                  Preço à vista
-                                </span>
-                                <span className="text-lg font-extrabold text-blue-600">
-                                  R$ {vehicle.price.toLocaleString('pt-BR')}
-                                </span>
-                              </div>
-                              {vehicle.fipePrice && (
-                                <span className="text-right">
-                                  <span className="text-[10px] text-slate-400 uppercase font-medium block">
-                                    FIPE
-                                  </span>
-                                  <span className="text-xs font-bold text-emerald-600">
-                                    R$ {vehicle.fipePrice.toLocaleString('pt-BR')}
-                                  </span>
+                        >
+                          {/* Imagem do veículo */}
+                          <div className={`relative ${viewMode === 'grid' ? 'h-48 w-full' : 'sm:w-60 h-48 sm:h-auto'}`}>
+                            <img
+                              src={vehicle.mainImage}
+                              alt={vehicle.title}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 items-start">
+                              {vehicle.fipeBadge && (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-600 text-white shadow-sm">
+                                  {vehicle.fipeBadge}
                                 </span>
                               )}
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-900/80 backdrop-blur-sm text-white">
+                                Laudo Aprovado
+                              </span>
                             </div>
 
-                            {/* Botão Ver Detalhes (reutiliza a página de detalhes existente) */}
                             <button
-                              onClick={() => onSelectVehicle(vehicle)}
-                              className="w-full py-2.5 px-3 rounded-xl bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white text-xs font-bold border border-blue-200 hover:border-transparent transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98]"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onToggleFavorite?.(vehicle.id);
+                              }}
+                              className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center transition-colors shadow-sm ${isFavorited ? 'bg-white text-red-500' : 'bg-white/90 text-slate-600 hover:text-red-500'
+                                }`}
+                              title={isFavorited ? 'Remover dos favoritos' : 'Favoritar'}
                             >
-                              <IconEye size={15} />
-                              Ver Detalhes do Veículo
+                              <IconHeart size={16} className={isFavorited ? 'fill-red-500 text-red-500' : ''} />
                             </button>
+
+                            <div className="absolute bottom-2 left-2.5 px-2 py-0.5 rounded bg-slate-900/80 backdrop-blur-sm text-white text-[10px] font-medium flex items-center gap-1">
+                              <IconMapPin size={11} />
+                              {vehicle.location}
+                            </div>
+                          </div>
+
+                          {/* Detalhes do Veículo */}
+                          <div className="p-4 flex flex-col gap-3 flex-1 justify-between">
+                            <div>
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+                                {vehicle.brand} • {vehicle.year}
+                              </div>
+                              <h4 className="font-extrabold text-sm text-slate-900 leading-snug line-clamp-1">
+                                {vehicle.title}
+                              </h4>
+                              <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
+                                <span>{vehicle.mileage}</span>
+                                <span>•</span>
+                                <span>{vehicle.transmission}</span>
+                                <span>•</span>
+                                <span>{vehicle.fuel}</span>
+                              </div>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-100">
+                              <div className="flex items-baseline justify-between mb-3">
+                                <div>
+                                  <span className="text-[10px] text-slate-400 uppercase font-medium block">
+                                    Preço à vista
+                                  </span>
+                                  <span className="text-lg font-extrabold text-blue-600">
+                                    R$ {vehicle.price.toLocaleString('pt-BR')}
+                                  </span>
+                                </div>
+                                {vehicle.fipePrice && (
+                                  <span className="text-right">
+                                    <span className="text-[10px] text-slate-400 uppercase font-medium block">
+                                      FIPE
+                                    </span>
+                                    <span className="text-xs font-bold text-emerald-600">
+                                      R$ {vehicle.fipePrice.toLocaleString('pt-BR')}
+                                    </span>
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Botão Ver Detalhes (reutiliza a página de detalhes existente) */}
+                              <button
+                                onClick={() => onSelectVehicle(vehicle)}
+                                className="w-full py-2.5 px-3 rounded-xl bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white text-xs font-bold border border-blue-200 hover:border-transparent transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98]"
+                              >
+                                <IconEye size={15} />
+                                Ver Detalhes do Veículo
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      );
+                    })}
+                  </div>
+                )}
 
                 {/* BOTTOM ACTION STRIP */}
                 <div className="bg-gradient-to-r from-blue-900 to-[#0b1329] text-white rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg mt-6">
@@ -1029,11 +1021,10 @@ export const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({
               {saveStatus && (
                 <div
                   role="alert"
-                  className={`p-3 rounded-xl text-xs font-semibold ${
-                    saveStatus.type === 'success'
+                  className={`p-3 rounded-xl text-xs font-semibold ${saveStatus.type === 'success'
                       ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                       : 'bg-red-50 text-red-800 border border-red-200'
-                  }`}
+                    }`}
                 >
                   {saveStatus.message}
                 </div>

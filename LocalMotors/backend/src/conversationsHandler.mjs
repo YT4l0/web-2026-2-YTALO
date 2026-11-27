@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+﻿import { createHash, randomUUID } from 'node:crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   BatchGetCommand,
@@ -48,11 +48,7 @@ function identity(event) {
     event.requestContext?.authorizer?.claims ||
     {};
   const ownerId = claims.sub;
-  if (
-    !ownerId ||
-    claims.email_verified === 'false' ||
-    claims['cognito:user_status'] === 'UNCONFIRMED'
-  ) {
+  if (!ownerId) {
     return null;
   }
   const fullName =
